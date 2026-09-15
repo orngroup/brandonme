@@ -123,8 +123,8 @@ async function boot(){
 }
 function render(){
   const v=$("#view"); v.innerHTML="";
-  ({rooms:renderRooms, dashboard:renderDashboard, packages:renderPackages, suppliers:renderSuppliers, quote:renderQuote,
-    profit:renderProfit, enquiries:renderEnquiries, chat:renderChat, admin:renderAdmin }[CURRENT_TAB]||renderRooms)(v);
+  ({rooms:renderRooms, pipeline:renderPipeline, packages:renderPackages, suppliers:renderSuppliers, quote:renderQuote,
+    profit:renderProfit, chat:renderChat, mne:renderMnE, admin:renderAdmin }[CURRENT_TAB]||renderRooms)(v);
 }
 
 /* ============================================================ ROOMS */
@@ -619,82 +619,145 @@ function saveQuoteAsEnquiry(){
   alert("Saved to the enquiry dashboard.");
 }
 
-/* ============================================================ ENQUIRIES */
+/* ============================================================ SALES PIPELINE (merged) */
 const ENQ_STAGES=[["enquiry","Enquiry"],["provisional","Provisional"],["confirmed","Confirmed"],["cancelled","Cancelled"]];
 const ENQ_OWNERS=["Nicola Cartwright","Natalie Freeman","Ajay Kawa","Raj Kumar","Alia Taub"];
-const ENQ_SOURCES=["Website","Events chat","Hitched","arrangeMY / agent","Phone","Email","Walk-in","Referral","Other"];
-function renderEnquiries(v){
-  v.appendChild(head("Enquiry Dashboard","Manage every enquiry across all channels — website, chat, agents and manual — from first enquiry to confirmed or cancelled."));
+const ENQ_SOURCES=["Website","Events chat","Hitched","arrangeMY / agent","Phone","Email","Walk-in","Referral","BOB / Rezlynx","Other"];
+
+let PIPE_FILTER={ key:null, val:null }; // active chart filter
+
+/* Combine BOB records + manual enquiries into one pipeline dataset */
+function pipelineData(){
+  const out=[];
+  // manual/chat/website enquiries from the live store
+  DB.all().forEach(e=>out.push(Object.assign({_kind:"enquiry"}, e)));
+  // BOB records mapped into the pipeline
+  if(typeof BOB!=="undefined"){
+    const map={ prospect:"provisional", confirmed:"confirmed", cancelled:"cancelled" };
+    ["prospect","confirmed","cancelled"].forEach(bucket=>{
+      BOB[bucket].forEach(r=>out.push({
+        _kind:"bob", id:"BOB-"+r.ref, name:r.guest, value:r.value, pax:r.pax,
+        room:roomIdFromName(r.room), roomName:r.room, date:r.arrival,
+        status:map[bucket], owner:r.operator, source:"BOB / Rezlynx",
+        ratePlan:r.ratePlan, ref:r.ref, created:r.arrival||BOB.pulled,
+        notes:`Rezlynx ${bucket} · ${r.ratePlan} · ref ${r.ref}` }));
+    });
+  }
+  return out;
+}
+function roomIdFromName(name){ const r=ROOMS.find(x=>x.name===name); return r?r.id:""; }
+
+function renderPipeline(v){
+  v.appendChild(head("Sales Pipeline","Live pipeline from Rezlynx business-on-books plus new enquiries. Click any chart to filter; click a card to manage it."));
   const tb=el("div","enq-toolbar");
   tb.innerHTML=`<button class="btn" id="enq-new">+ New enquiry</button>
     <button class="btn ghost" id="enq-chat">Open events chat</button>
-    <button class="btn ghost" id="enq-link">Copy shareable link</button><div class="spacer"></div>`;
+    <button class="btn ghost" id="enq-link">Copy chat link</button>
+    <div class="spacer"></div>
+    ${PIPE_FILTER.key?`<button class="btn ghost sm" id="pf-clear">✕ Clear filter: ${PIPE_FILTER.val}</button>`:""}`;
   v.appendChild(tb);
   $("#enq-new").onclick=()=>openEnquiryForm({});
   $("#enq-chat").onclick=()=>switchTab("chat");
   $("#enq-link").onclick=()=>{ const url=location.href.split("#")[0]+"#events-chat";
     navigator.clipboard?.writeText(url); alert("Shareable events-chat link copied:\n"+url); };
+  if($("#pf-clear")) $("#pf-clear").onclick=()=>{ PIPE_FILTER={key:null,val:null}; render(); };
 
-  const list=DB.all();
+  let all=pipelineData();
+  // apply active filter
+  if(PIPE_FILTER.key){
+    all=all.filter(e=>{
+      if(PIPE_FILTER.key==="room") return (e.roomName||ROOMS.find(r=>r.id===e.room)?.name)===PIPE_FILTER.val;
+      if(PIPE_FILTER.key==="owner") return e.owner===PIPE_FILTER.val;
+      if(PIPE_FILTER.key==="ratePlan") return e.ratePlan===PIPE_FILTER.val;
+      if(PIPE_FILTER.key==="source") return (e.source||"")===PIPE_FILTER.val;
+      return true;
+    });
+  }
 
-  // ---- dashboard stat cards ----
+  // ---- KPI cards ----
+  const openItems=all.filter(e=>["enquiry","provisional"].includes(e.status));
+  const confItems=all.filter(e=>e.status==="confirmed");
   const today=new Date().toISOString().slice(0,10);
-  const monthAgo=new Date(Date.now()-30*864e5);
-  const openCount=list.filter(e=>["enquiry","provisional"].includes(e.status)).length;
-  const confirmedCount=list.filter(e=>e.status==="confirmed").length;
-  const newThisMonth=list.filter(e=>new Date(e.created)>=monthAgo).length;
-  const pipelineVal=list.filter(e=>["enquiry","provisional"].includes(e.status)).reduce((s,e)=>s+(e.value||0),0);
-  const confirmedVal=list.filter(e=>e.status==="confirmed").reduce((s,e)=>s+(e.value||0),0);
-  const overdue=list.filter(e=>e.followUp && e.followUp<today && ["enquiry","provisional"].includes(e.status)).length;
-  const conv = list.length? Math.round(confirmedCount/list.length*100):0;
-  const stats=el("div","stat-cards");
-  stats.innerHTML=`
-    <div class="stat-card"><div class="sc-v">${list.length}</div><div class="sc-k">Total enquiries</div></div>
-    <div class="stat-card"><div class="sc-v">${openCount}</div><div class="sc-k">Open (enquiry + provisional)</div></div>
-    <div class="stat-card accent"><div class="sc-v">${money(pipelineVal)}</div><div class="sc-k">Open pipeline value</div></div>
-    <div class="stat-card"><div class="sc-v">${confirmedCount}</div><div class="sc-k">Confirmed</div></div>
-    <div class="stat-card"><div class="sc-v">${money(confirmedVal)}</div><div class="sc-k">Confirmed value</div></div>
+  const overdue=all.filter(e=>e.followUp && e.followUp<today && ["enquiry","provisional"].includes(e.status)).length;
+  const kpis=el("div","stat-cards");
+  kpis.innerHTML=`
+    <div class="stat-card accent"><div class="sc-v">${money(Math.round(openItems.reduce((s,e)=>s+(e.value||0),0)))}</div><div class="sc-k">Open pipeline value</div></div>
+    <div class="stat-card"><div class="sc-v">${openItems.length}</div><div class="sc-k">Open opportunities</div></div>
+    <div class="stat-card"><div class="sc-v">${money(Math.round(confItems.reduce((s,e)=>s+(e.value||0),0)))}</div><div class="sc-k">Confirmed value</div></div>
+    <div class="stat-card"><div class="sc-v">${confItems.length}</div><div class="sc-k">Confirmed</div></div>
+    <div class="stat-card"><div class="sc-v">${all.length}</div><div class="sc-k">Total in view</div></div>
     <div class="stat-card"><div class="sc-v" style="${overdue?'color:#b3261e':''}">${overdue}</div><div class="sc-k">Follow-ups overdue</div></div>`;
-  v.appendChild(stats);
+  v.appendChild(kpis);
 
-  if(!list.length){ v.appendChild(el("div","empty",`<div class="big">No enquiries yet</div>
-    Log one manually, share the events-chat link, or forward website leads here.`)); return; }
-
-  // ---- source breakdown ----
-  const bySource={}; list.forEach(e=>{ const s=e.source||"manual"; bySource[s]=(bySource[s]||0)+1; });
-  const srcBar=el("div","source-bar");
-  srcBar.innerHTML=`<span class="sb-label">By channel:</span>`+
-    Object.entries(bySource).map(([s,n])=>`<span class="src-pill">${s} <b>${n}</b></span>`).join("");
-  v.appendChild(srcBar);
+  // ---- clickable charts (based on open + provisional pipeline) ----
+  const chartBase=all.filter(e=>["enquiry","provisional","confirmed"].includes(e.status));
+  const row1=el("div","chart-row");
+  row1.appendChild(clickableChart("Pipeline value by room","room", barChartData(chartBase,e=>e.roomName||ROOMS.find(r=>r.id===e.room)?.name||"—")));
+  row1.appendChild(clickableChart("Pipeline value by owner","owner", pieChartData(chartBase,e=>e.owner||"Unassigned")));
+  v.appendChild(row1);
+  const row2=el("div","chart-row");
+  row2.appendChild(clickableChart("Value by rate plan","ratePlan", pieChartData(chartBase,e=>e.ratePlan||"Enquiry")));
+  row2.appendChild(clickableChart("Value by source","source", pieChartData(chartBase,e=>e.source||"manual")));
+  v.appendChild(row2);
 
   // ---- pipeline board ----
   const cols=el("div","enq-cols");
   ENQ_STAGES.forEach(([sid,slabel])=>{
-    const items=list.filter(e=>e.status===sid);
+    const items=all.filter(e=>e.status===sid).sort((a,b)=>(b.value||0)-(a.value||0));
     const stageVal=items.reduce((s,e)=>s+(e.value||0),0);
     const col=el("div","enq-col");
     col.innerHTML=`<h4>${slabel} <span>${items.length}</span></h4>
-      ${stageVal?`<div class="col-value">${money(stageVal)}</div>`:""}`;
-    items.forEach(e=>{
-      const room=ROOMS.find(r=>r.id===e.room);
+      ${stageVal?`<div class="col-value">${money(Math.round(stageVal))}</div>`:""}`;
+    items.slice(0,60).forEach(e=>{
+      const roomName=e.roomName||ROOMS.find(r=>r.id===e.room)?.name;
       const et=EVENT_TYPES.find(t=>t.id===e.event);
       const fmtDate=d=>d?(/^\d{4}-\d{2}-\d{2}/.test(d)?new Date(d).toLocaleDateString("en-GB"):d):"";
-      const overdue = e.followUp && e.followUp<today && !["confirmed","cancelled"].includes(e.status);
-      const initials = e.owner? e.owner.split(" ").map(w=>w[0]).join("") : "";
+      const overdueF = e.followUp && e.followUp<today && !["confirmed","cancelled"].includes(e.status);
+      const initials = e.owner? e.owner.split(" ").map(w=>w[0]).join("").slice(0,2) : "";
       const card=el("div","enq-card");
       card.innerHTML=`<div class="ec-top">
           <div class="nm">${e.name}</div>
           ${e.owner?`<span class="owner-badge" title="${e.owner}">${initials}</span>`:""}
         </div>
-        <div class="meta">${et?et.icon+" "+et.label:"—"} · ${e.pax||"?"} guests${e.date?" · "+fmtDate(e.date):""}</div>
-        <div class="tags">${e.value?`<span class="tag val">${money(e.value)}</span>`:""}${room?`<span class="tag">${room.name}</span>`:""}${e.costing?`<span class="tag profit">${money(Math.round(e.costing.profit))} profit</span>`:""}<span class="tag src">${e.source||"manual"}</span></div>
-        ${e.followUp?`<div class="followup ${overdue?"overdue":""}">${overdue?"⚠ ":"📅 "}Follow up ${fmtDate(e.followUp)}</div>`:""}`;
+        <div class="meta">${et?et.icon+" "+et.label:(e.ratePlan||"—")} · ${e.pax?e.pax+" pax":""}${e.date?" · "+fmtDate(e.date):""}</div>
+        <div class="tags">${e.value?`<span class="tag val">${money(Math.round(e.value))}</span>`:""}${roomName?`<span class="tag">${roomName}</span>`:""}${e.costing?`<span class="tag profit">${money(Math.round(e.costing.profit))} profit</span>`:""}<span class="tag src">${e._kind==="bob"?"BOB":(e.source||"manual")}</span></div>
+        ${e.followUp?`<div class="followup ${overdueF?"overdue":""}">${overdueF?"⚠ ":"📅 "}Follow up ${fmtDate(e.followUp)}</div>`:""}`;
       card.onclick=()=>openEnquiryDetail(e);
       col.appendChild(card);
     });
+    if(items.length>60) col.appendChild(el("div","qs-sub",`<span style="font-size:11px">+${items.length-60} more…</span>`));
     cols.appendChild(col);
   });
   v.appendChild(cols);
+}
+
+/* chart data helpers that return {label,val} sorted */
+function barChartData(arr,keyFn,limit=8){
+  const m={}; arr.forEach(e=>{ const k=keyFn(e)||"—"; m[k]=(m[k]||0)+(e.value||0); });
+  let ent=Object.entries(m).filter(([,val])=>val>0).sort((a,b)=>b[1]-a[1]);
+  if(ent.length>limit){ const top=ent.slice(0,limit-1);
+    top.push(["Other",ent.slice(limit-1).reduce((s,[,val])=>s+val,0)]); ent=top; }
+  return ent.map(([label,val])=>({label,val}));
+}
+function pieChartData(arr,keyFn,limit=6){ return barChartData(arr,keyFn,limit); }
+
+function clickableChart(title,filterKey,data){
+  const card=el("div","chart-card clickable");
+  const isBar = data.length>5 || title.includes("room");
+  card.innerHTML=`<div class="cc-title">${title} <span class="cc-hint">click to filter</span></div>${isBar?barChart(data):pieChart(data)}`;
+  // attach click handlers to segments by wrapping labels
+  card.querySelectorAll("text").forEach(()=>{});
+  card.onclick=(ev)=>{
+    // figure out which label was clicked from data — use a simple menu of the data labels
+    // (SVG segments are small; clicking the card cycles a chooser)
+  };
+  // Better: render clickable legend rows below
+  const chooser=el("div","chart-filter-row");
+  chooser.innerHTML=data.map(d=>`<button class="cf-btn" data-val="${d.label.replace(/"/g,'&quot;')}">${d.label} · ${money(Math.round(d.val))}</button>`).join("");
+  chooser.querySelectorAll(".cf-btn").forEach(b=>b.onclick=(e)=>{ e.stopPropagation();
+    PIPE_FILTER={ key:filterKey, val:b.dataset.val }; render(); });
+  card.appendChild(chooser);
+  return card;
 }
 function openEnquiryForm(pre){
   const today=new Date().toISOString().slice(0,10);
@@ -729,29 +792,33 @@ function openEnquiryForm(pre){
   };
 }
 function openEnquiryDetail(e){
-  const room=ROOMS.find(r=>r.id===e.room); const et=EVENT_TYPES.find(t=>t.id===e.event);
+  const roomName=e.roomName||ROOMS.find(r=>r.id===e.room)?.name;
+  const et=EVENT_TYPES.find(t=>t.id===e.event);
   const fmtDate=d=>d?(/^\d{4}-\d{2}-\d{2}/.test(d)?new Date(d).toLocaleDateString("en-GB"):d):"—";
+  const isBob = e._kind==="bob";
   const body=`<div class="detail-row">
-      <div class="stat"><div class="k">Event</div><div class="v" style="font-size:16px">${et?et.label:"—"}</div></div>
-      <div class="stat"><div class="k">Guests</div><div class="v">${e.pax||"—"}</div></div>
-      <div class="stat"><div class="k">Value</div><div class="v">${e.value?money(e.value):"—"}</div></div>
+      <div class="stat"><div class="k">${et?"Event":"Rate plan"}</div><div class="v" style="font-size:16px">${et?et.label:(e.ratePlan||"—")}</div></div>
+      <div class="stat"><div class="k">${isBob?"PAX":"Guests"}</div><div class="v">${e.pax||"—"}</div></div>
+      <div class="stat"><div class="k">Value</div><div class="v">${e.value?money(Math.round(e.value)):"—"}</div></div>
+      ${roomName?`<div class="stat"><div class="k">Room</div><div class="v" style="font-size:15px">${roomName}</div></div>`:""}
     </div>
+    ${isBob?`<div class="bob-note">📊 From Rezlynx business-on-books (ref ${e.ref}). Editing below promotes it to a managed enquiry.</div>`:""}
 
     <div class="sec-title">Manage</div>
     <div class="manage-grid">
       <div><label>Owner</label><select id="m-owner">${ENQ_OWNERS.map(o=>`<option ${e.owner===o?"selected":""}>${o}</option>`).join("")}</select></div>
       <div><label>Stage</label><select id="m-stage">${ENQ_STAGES.map(([s,l])=>`<option value="${s}" ${e.status===s?"selected":""}>${l}</option>`).join("")}</select></div>
-      <div><label>Value (£)</label><input id="m-value" type="number" min="0" value="${e.value||0}"></div>
-      <div><label>Event date</label><input id="m-date" type="date" value="${/^\d{4}-\d{2}-\d{2}/.test(e.date||"")?e.date:""}"></div>
+      <div><label>Value (£)</label><input id="m-value" type="number" min="0" value="${Math.round(e.value)||0}"></div>
+      <div><label>Event date</label><input id="m-date" type="date" value="${/^\d{4}-\d{2}-\d{2}/.test(e.date||"")?e.date.slice(0,10):""}"></div>
       <div><label>Follow-up</label><input id="m-followup" type="date" value="${e.followUp||""}"></div>
       <div><label>Source</label><select id="m-source">${ENQ_SOURCES.map(s=>`<option ${e.source===s?"selected":""}>${s}</option>`).join("")}</select></div>
     </div>
     <button class="btn sm" id="m-save" style="margin-top:10px">Save changes</button>
 
-    <div class="sec-title">Contact</div>
-    <p style="font-size:14px">${e.email||"—"} · ${e.phone||"—"} ${e.company?" · "+e.company:""}</p>
+    ${(e.email||e.phone)?`<div class="sec-title">Contact</div>
+    <p style="font-size:14px">${e.email||"—"} · ${e.phone||"—"} ${e.company?" · "+e.company:""}</p>`:""}
     ${(e.budget||e.accommodation)?`<p style="font-size:14px;color:var(--muted)">${e.budget?`Budget: ${e.budget} · `:""}${e.accommodation?`Accommodation: ${e.accommodation}`:""}</p>`:""}
-    ${e.notes?`<div class="sec-title">Enquiry brief</div><p style="font-size:14px;line-height:1.6">${e.notes}</p>`:""}
+    ${e.notes?`<div class="sec-title">Notes</div><p style="font-size:14px;line-height:1.6">${e.notes}</p>`:""}
     ${e.costing?`<div class="sec-title">Profitability</div>
       <div class="enq-costing">
         <div><span class="ec-v">${money(Math.round(e.costing.profit))}</span><span class="ec-k">Est. profit</span></div>
@@ -763,12 +830,19 @@ function openEnquiryDetail(e){
       <button class="btn" id="enq-cost">${e.costing?"Re-cost this event":"Cost this event"}</button>
       <button class="btn ghost" id="enq-quote">Create a quote</button>
     </div>
-    <div class="qs-sub" style="margin-top:14px">Ref ${e.id} · ${e.owner?`owned by ${e.owner} · `:""}logged ${new Date(e.created).toLocaleString("en-GB")}${e.followUp?` · follow up ${fmtDate(e.followUp)}`:""}</div>`;
-  showModal(e.name, `${et?et.label:"Enquiry"} · ${e.source||"manual"}`, body);
+    <div class="qs-sub" style="margin-top:14px">Ref ${e.ref||e.id} · ${e.owner?`owned by ${e.owner}`:""}</div>`;
+  showModal(e.name, `${et?et.label:(e.ratePlan||"Enquiry")} · ${isBob?"BOB / Rezlynx":(e.source||"manual")}`, body);
   $("#m-save").onclick=()=>{
-    DB.update(e.id,{ owner:$("#m-owner").value, status:$("#m-stage").value,
+    const patch={ owner:$("#m-owner").value, status:$("#m-stage").value,
       value:parseFloat($("#m-value").value)||0, date:$("#m-date").value||e.date,
-      followUp:$("#m-followup").value, source:$("#m-source").value });
+      followUp:$("#m-followup").value, source:$("#m-source").value };
+    if(isBob){
+      // promote BOB record into the live managed store
+      DB.add(Object.assign({ name:e.name, pax:e.pax, room:e.room, roomName:e.roomName,
+        ratePlan:e.ratePlan, ref:e.ref, notes:e.notes, event:e.event||"" }, patch));
+    } else {
+      DB.update(e.id, patch);
+    }
     closeModal(); render();
   };
   $("#enq-cost").onclick=()=>{ closeModal(); profitPrefill={ enquiry:e }; switchTab("profit"); };
@@ -1252,66 +1326,105 @@ function printProfit(){
   win.document.close();
 }
 
-/* ============================================================ SALES DASHBOARD (BOB) */
-function renderDashboard(v){
-  v.appendChild(head("Meeting & Events Sales Dashboard","Live business-on-books from Rezlynx. Prospect, confirmed and cancelled analysis."));
-  if(typeof BOB==="undefined"){ v.appendChild(el("div","empty","BOB data not loaded.")); return; }
+/* ============================================================ M&E UPGRADE TRACKER */
+function renderMnE(v){
+  v.appendChild(head("M&E Upgrade — Equipment Tracker","Manage equipment needed in each room: TVs, projectors, connectivity, furniture, power and software. Track from needed → ordered → delivered → installed."));
 
-  const sum=arr=>arr.reduce((s,r)=>s+(r.value||0),0);
-  const prospectVal=sum(BOB.prospect), confirmedVal=sum(BOB.confirmed), cancelledVal=sum(BOB.cancelled);
+  // build a working copy from localStorage overlay (so edits persist)
+  const state=MnEState.all();
 
-  // KPI cards
+  // ---- overall progress KPIs ----
+  let counts={needed:0,ordered:0,delivered:0,installed:0}, total=0;
+  ROOMS.forEach(r=>{ const items=MnEState.items(r.id);
+    items.forEach(it=>{ counts[it.status]=(counts[it.status]||0)+1; total++; }); });
   const kpis=el("div","stat-cards");
   kpis.innerHTML=`
-    <div class="stat-card accent"><div class="sc-v">${money(Math.round(prospectVal))}</div><div class="sc-k">Prospect pipeline</div></div>
-    <div class="stat-card"><div class="sc-v">${money(Math.round(confirmedVal))}</div><div class="sc-k">Confirmed on books</div></div>
-    <div class="stat-card"><div class="sc-v">${BOB.prospect.length}</div><div class="sc-k">Live prospects</div></div>
-    <div class="stat-card"><div class="sc-v">${BOB.confirmed.length}</div><div class="sc-k">Confirmed bookings</div></div>
-    <div class="stat-card"><div class="sc-v">${money(Math.round(prospectVal/(BOB.prospect.length||1)))}</div><div class="sc-k">Avg prospect value</div></div>
-    <div class="stat-card"><div class="sc-v">${BOB.cancelled.length}</div><div class="sc-k">Cancelled</div></div>`;
+    <div class="stat-card"><div class="sc-v">${total}</div><div class="sc-k">Total items</div></div>
+    <div class="stat-card"><div class="sc-v" style="color:#b3261e">${counts.needed}</div><div class="sc-k">Needed</div></div>
+    <div class="stat-card"><div class="sc-v" style="color:#c07a3e">${counts.ordered}</div><div class="sc-k">Ordered</div></div>
+    <div class="stat-card"><div class="sc-v" style="color:#7a9bc4">${counts.delivered}</div><div class="sc-k">Delivered</div></div>
+    <div class="stat-card accent"><div class="sc-v">${counts.installed}</div><div class="sc-k">Installed</div></div>
+    <div class="stat-card"><div class="sc-v">${total?Math.round(counts.installed/total*100):0}%</div><div class="sc-k">Complete</div></div>`;
   v.appendChild(kpis);
-  v.appendChild(el("p","qs-sub",`<span style="font-size:12px;color:var(--muted)">Data pulled ${new Date(BOB.pulled).toLocaleDateString("en-GB")} from ${BOB.source}.</span>`));
 
-  // ---- charts row 1: pipeline by room (bar) + value by rate plan (pie) ----
-  const row1=el("div","chart-row");
-  row1.appendChild(chartCard("Prospect pipeline value by room", barChart(topByRoom(BOB.prospect,8))));
-  row1.appendChild(chartCard("Prospect value by rate plan", pieChart(byKey(BOB.prospect,"ratePlan",6))));
-  v.appendChild(row1);
+  // ---- per-room panels ----
+  ROOMS.forEach(r=>{
+    const conf=MNE_ROOMS[r.id];
+    const items=MnEState.items(r.id);
+    if(!conf && !items.length) return;
+    const panel=el("div","mne-room");
+    const ready = conf? conf.readyToSell : null;
+    const readyBadge = ready===true?`<span class="rs-badge rs-yes">✓ Ready to sell</span>`
+      : ready===false?`<span class="rs-badge rs-no">✗ Not ready</span>`
+      : `<span class="rs-badge rs-tbc">Audit pending</span>`;
+    panel.innerHTML=`<div class="mne-head">
+        <h3>${r.name} <span class="mne-m2">${r.m2} m²</span></h3>
+        ${readyBadge}
+        <button class="btn sm mne-add" data-room="${r.id}">+ Item</button>
+      </div>
+      ${conf&&conf.currentAV?`<div class="mne-current">Current AV: ${conf.currentAV}</div>`:""}
+      ${conf&&conf.comments?`<div class="mne-comment">${conf.comments}</div>`:""}
+      <div class="mne-items" id="mne-${r.id}"></div>`;
+    v.appendChild(panel);
+    renderMnEItems(r.id);
+  });
 
-  // ---- charts row 2: by owner (pie) + monthly arrivals (bar) ----
-  const row2=el("div","chart-row");
-  row2.appendChild(chartCard("Prospect value by owner", pieChart(byKey(BOB.prospect,"operator",5))));
-  row2.appendChild(chartCard("Confirmed value by room", barChart(topByRoom(BOB.confirmed,6))));
-  v.appendChild(row2);
-
-  // ---- monthly pipeline (arrivals) ----
-  v.appendChild(chartCard("Prospect pipeline by arrival month", barChart(byMonth(BOB.prospect)), true));
-
-  // ---- top opportunities table ----
-  v.appendChild(el("div","sec-title","Top 10 prospect opportunities"));
-  const top=[...BOB.prospect].sort((a,b)=>b.value-a.value).slice(0,10);
-  const t=el("table","data-table");
-  t.innerHTML=`<tr><th>Guest</th><th>Room</th><th>Arrival</th><th>PAX</th><th>Owner</th><th style="text-align:right">Value</th></tr>`+
-    top.map(r=>`<tr><td>${r.guest}</td><td>${r.room}</td><td>${r.arrival?new Date(r.arrival).toLocaleDateString("en-GB"):"—"}</td>
-      <td>${r.pax||"—"}</td><td>${r.operator}</td><td style="text-align:right;font-weight:600">${money(Math.round(r.value))}</td></tr>`).join("");
-  v.appendChild(t);
+  document.querySelectorAll(".mne-add").forEach(b=>b.onclick=()=>openMnEItemForm(b.dataset.room));
 }
-
-/* ---- data helpers ---- */
-function byKey(arr,key,limit){
-  const m={}; arr.forEach(r=>{ const k=r[key]||"—"; m[k]=(m[k]||0)+(r.value||0); });
-  let e=Object.entries(m).filter(([,val])=>val>0).sort((a,b)=>b[1]-a[1]);
-  if(limit && e.length>limit){ const top=e.slice(0,limit-1);
-    const rest=e.slice(limit-1).reduce((s,[,val])=>s+val,0); top.push(["Other",rest]); e=top; }
-  return e.map(([label,val])=>({label,val}));
+function renderMnEItems(roomId){
+  const box=$("#mne-"+roomId); if(!box)return;
+  const items=MnEState.items(roomId);
+  if(!items.length){ box.innerHTML=`<div class="qs-sub" style="padding:8px 0">No items yet — add what this room needs.</div>`; return; }
+  box.innerHTML=`<table class="mne-table">
+    <tr><th>Item</th><th>Cat</th><th>Size</th><th>Qty</th><th>Status</th><th></th></tr>`+
+    items.map((it,i)=>`<tr>
+      <td>${it.item}</td><td><span class="cat-pill">${it.cat}</span></td>
+      <td>${it.size||"—"}</td><td>${it.qty}</td>
+      <td><select class="mne-status ${it.status}" data-room="${roomId}" data-i="${i}">
+        ${MNE_STATUSES.map(s=>`<option value="${s}" ${it.status===s?"selected":""}>${s.charAt(0).toUpperCase()+s.slice(1)}</option>`).join("")}
+      </select></td>
+      <td><button class="mne-del" data-room="${roomId}" data-i="${i}" title="Remove">×</button></td>
+    </tr>`).join("")+`</table>`;
+  box.querySelectorAll(".mne-status").forEach(sel=>sel.onchange=()=>{
+    MnEState.setStatus(sel.dataset.room, +sel.dataset.i, sel.value); render(); });
+  box.querySelectorAll(".mne-del").forEach(b=>b.onclick=()=>{
+    MnEState.remove(b.dataset.room, +b.dataset.i); render(); });
 }
-function topByRoom(arr,limit){ return byKey(arr,"room",limit); }
-function byMonth(arr){
-  const m={}; arr.forEach(r=>{ if(!r.arrival)return; const d=new Date(r.arrival);
-    const k=d.toLocaleDateString("en-GB",{month:"short",year:"2-digit"}); const sortK=d.getFullYear()*100+d.getMonth();
-    m[k]=m[k]||{val:0,sortK}; m[k].val+=r.value||0; });
-  return Object.entries(m).sort((a,b)=>a[1].sortK-b[1].sortK).map(([label,o])=>({label,val:o.val}));
+function openMnEItemForm(roomId){
+  const room=ROOMS.find(r=>r.id===roomId);
+  const sizes=['43"','55"','65"','75"','86"','98"','100"'];
+  const body=`<div class="form-grid">
+    <div><label>Category</label><select id="mi-cat">${MNE_CATEGORIES.map(c=>`<option>${c}</option>`).join("")}</select></div>
+    <div><label>Item</label><input id="mi-item" placeholder="e.g. 4K Smart TV"></div>
+    <div><label>Size (screens)</label><select id="mi-size"><option value="">N/A</option>${sizes.map(s=>`<option>${s}</option>`).join("")}</select></div>
+    <div><label>Quantity</label><input id="mi-qty" type="number" min="1" value="1"></div>
+    <div><label>Status</label><select id="mi-status">${MNE_STATUSES.map(s=>`<option value="${s}">${s.charAt(0).toUpperCase()+s.slice(1)}</option>`).join("")}</select></div>
+  </div>
+  <div style="margin-top:18px"><button class="btn" id="mi-save">Add item</button></div>`;
+  showModal(`Add equipment — ${room.name}`,"New M&E item",body);
+  $("#mi-save").onclick=()=>{
+    const item=$("#mi-item").value.trim(); if(!item){ $("#mi-item").focus(); return; }
+    MnEState.add(roomId,{ cat:$("#mi-cat").value, item, size:$("#mi-size").value,
+      qty:parseInt($("#mi-qty").value)||1, status:$("#mi-status").value });
+    closeModal(); render();
+  };
 }
+/* M&E state: seeds from MNE_ROOMS, persists edits to localStorage */
+const MnEState={
+  key:"bh_mne",
+  _store:null,
+  load(){ if(this._store)return this._store;
+    try{ this._store=JSON.parse(localStorage.getItem(this.key)); }catch{ this._store=null; }
+    if(!this._store){ this._store={}; Object.entries(MNE_ROOMS).forEach(([rid,conf])=>{
+      this._store[rid]=(conf.items||[]).map(x=>Object.assign({},x)); }); this.save(); }
+    return this._store; },
+  save(){ localStorage.setItem(this.key, JSON.stringify(this._store)); },
+  all(){ return this.load(); },
+  items(roomId){ return this.load()[roomId]||[]; },
+  add(roomId,item){ this.load(); (this._store[roomId]=this._store[roomId]||[]).push(item); this.save(); },
+  remove(roomId,i){ this.load(); this._store[roomId].splice(i,1); this.save(); },
+  setStatus(roomId,i,status){ this.load(); this._store[roomId][i].status=status; this.save(); }
+};
 
 /* ---- SVG chart builders ---- */
 const CHART_COLOURS=["#1a2b47","#BB9979","#4a7c59","#7a9bc4","#c9814f","#9d7d5f","#b0a99f","#d4b483"];

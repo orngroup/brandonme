@@ -177,6 +177,34 @@ main{flex:1;padding:24px 20px 60px;max-width:1180px;margin:0 auto;width:100%}
 .pie-leg b{margin-left:auto;color:var(--navy)}
 @media(max-width:700px){.chart-row{grid-template-columns:1fr}}
 
+/* clickable chart filters */
+.chart-card.clickable .cc-hint{font-size:10px;color:var(--muted);font-weight:400;margin-left:6px}
+.chart-filter-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.cf-btn{font-size:11.5px;background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:4px 10px;color:var(--ink-2);transition:.15s}
+.cf-btn:hover{background:var(--navy);color:#fff;border-color:var(--navy)}
+.bob-note{background:#eef2f8;border:1px solid #d5e0ee;border-radius:8px;padding:10px 13px;font-size:12.5px;color:var(--navy);margin-bottom:14px}
+
+/* M&E tracker */
+.mne-room{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;box-shadow:var(--shadow);margin-bottom:14px}
+.mne-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.mne-head h3{font-family:var(--serif);font-size:20px;font-weight:600}
+.mne-m2{font-size:12px;color:var(--muted);font-family:var(--sans);font-weight:400}
+.mne-head .mne-add{margin-left:auto}
+.rs-badge{font-size:11px;font-weight:700;padding:3px 10px;border-radius:12px}
+.rs-yes{background:#e0efe4;color:var(--ok)}.rs-no{background:#fdecec;color:#b3261e}.rs-tbc{background:#f2f2f2;color:var(--muted)}
+.mne-current{font-size:12.5px;color:var(--ink-2);margin-top:10px}
+.mne-comment{font-size:12.5px;color:var(--warn);background:#fdf6ee;border-radius:7px;padding:8px 11px;margin-top:8px}
+.mne-items{margin-top:12px}
+.mne-table{width:100%;border-collapse:collapse;font-size:13px}
+.mne-table th{text-align:left;padding:7px 6px;border-bottom:1px solid var(--line);font-size:11px;color:var(--muted);font-weight:600}
+.mne-table td{padding:7px 6px;border-bottom:1px solid var(--line)}
+.cat-pill{font-size:11px;background:var(--paper);border:1px solid var(--line);border-radius:5px;padding:2px 7px;color:var(--ink-2)}
+.mne-status{padding:4px 8px;border-radius:6px;border:1px solid var(--line);font-size:12px;font-weight:600}
+.mne-status.needed{background:#fdecec;color:#b3261e}.mne-status.ordered{background:#fdf0e3;color:#c07a3e}
+.mne-status.delivered{background:#eef2f8;color:#3a6ea5}.mne-status.installed{background:#e0efe4;color:var(--ok)}
+.mne-del{width:22px;height:22px;border-radius:5px;background:var(--paper);color:var(--muted);font-size:15px}
+.mne-del:hover{background:#f0e3e3;color:#b3261e}
+
 /* ---------- ENHANCED ENQUIRY CARDS ---------- */
 .col-value{font-size:12px;font-weight:600;color:var(--gold-dk);margin:-4px 0 10px}
 .ec-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
@@ -462,13 +490,13 @@ main{flex:1;padding:24px 20px 60px;max-width:1180px;margin:0 auto;width:100%}
   </header>
   <nav class="tabs" id="tabs">
     <button data-tab="rooms" class="active">Rooms</button>
-    <button data-tab="dashboard">Sales Dashboard</button>
+    <button data-tab="pipeline">Sales Pipeline</button>
     <button data-tab="packages">Packages</button>
     <button data-tab="suppliers">Suppliers</button>
     <button data-tab="quote">Create Quote</button>
     <button data-tab="profit">Profit Tool</button>
-    <button data-tab="enquiries">Enquiries</button>
     <button data-tab="chat">Events Chat</button>
+    <button data-tab="mne">M&amp;E Upgrade</button>
     <button data-tab="admin">Admin</button>
   </nav>
   <main id="view"></main>

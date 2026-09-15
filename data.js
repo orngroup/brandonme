@@ -430,3 +430,77 @@ function templateForEvent(evId){
   if(["birthday","baby-shower","celebration"].includes(evId)) return "celebration";
   return "wedding";
 }
+
+/* ============================================================
+   M&E UPGRADE — equipment tracker per room
+   Source: "M&E as of 20 Mar" sheet. Each item has qty, status
+   (needed / ordered / delivered / installed) and optional size.
+   ============================================================ */
+const MNE_STATUSES = ["needed","ordered","delivered","installed"];
+const MNE_CATEGORIES = ["Screen","Projector","Connectivity","Software","Furniture","Power","Stationery","Other"];
+
+/* Standard inclusions every meeting room gets (DDR/24hr standard) */
+const MNE_STANDARD = ["Screen","HDMI cable","Wi-Fi","Pads & pens","Flipchart pads & pens","Branded notepads"];
+
+/* Per-room equipment lines from the audit. size only where relevant (TV "). */
+const MNE_ROOMS = {
+  "brandon-1": { readyToSell:true, currentAV:"Projector screen",
+    comments:"Sell as part of Brandon 1 as breakout/refreshment area — no access except through Brandon 1. TV hidden as room doubles for social gatherings.",
+    items:[
+      { cat:"Screen", item:'4K Smart TV', size:'98"', qty:1, status:"needed" },
+      { cat:"Furniture", item:"Swivel stand, height-adjustable", qty:1, status:"needed" },
+      { cat:"Connectivity", item:"HDMI cable", qty:1, status:"needed" },
+      { cat:"Connectivity", item:"USB-C connectors", qty:1, status:"needed" },
+      { cat:"Software", item:"ClickShare", qty:1, status:"needed" }
+    ]},
+  "brandon-2": { readyToSell:true, currentAV:"No equipment",
+    comments:"TV hidden as room doubles for social gatherings.",
+    items:[
+      { cat:"Screen", item:'4K Smart TV', size:'98"', qty:1, status:"needed" },
+      { cat:"Furniture", item:"Swivel stand, height-adjustable", qty:1, status:"needed" },
+      { cat:"Connectivity", item:"HDMI cable", qty:1, status:"needed" },
+      { cat:"Connectivity", item:"USB-C connectors", qty:1, status:"needed" },
+      { cat:"Software", item:"ClickShare", qty:1, status:"needed" }
+    ]},
+  "wolston-suite": { readyToSell:true, currentAV:"1 x projector screen, no projector",
+    comments:"Long room — additional screen needed so guests see the presentation. Partition now removed (15/9).",
+    items:[
+      { cat:"Screen", item:'4K Smart TV', size:'75"', qty:1, status:"needed" },
+      { cat:"Screen", item:"Additional screen on stand (long room)", qty:1, status:"needed" },
+      { cat:"Connectivity", item:"HDMI cable", qty:1, status:"needed" },
+      { cat:"Connectivity", item:"USB-C connectors", qty:1, status:"needed" },
+      { cat:"Software", item:"ClickShare", qty:1, status:"needed" }
+    ]},
+  "beech": { readyToSell:false, currentAV:"None",
+    comments:"NOT READY: door needs fixing (attempted break-in, bottom panel broken), ladybird influx to clear, AV & door lock to fix.",
+    items:[
+      { cat:"Screen", item:'4K Smart TV', size:'75"', qty:1, status:"needed" },
+      { cat:"Connectivity", item:"HDMI cable", qty:1, status:"needed" },
+      { cat:"Connectivity", item:"USB-C connectors", qty:1, status:"needed" },
+      { cat:"Software", item:"ClickShare", qty:1, status:"needed" },
+      { cat:"Other", item:"Door repair & lock", qty:1, status:"needed" },
+      { cat:"Other", item:"Ladybird clearance", qty:1, status:"needed" }
+    ]},
+  "hunt": { readyToSell:false, currentAV:"TV on wall (HDMI compatibility unconfirmed)",
+    comments:"NOT READY: damp ceiling; cannot access room currently. Images to follow.",
+    items:[
+      { cat:"Connectivity", item:"HDMI cable", qty:1, status:"needed" },
+      { cat:"Connectivity", item:"USB-C connectors", qty:1, status:"needed" },
+      { cat:"Stationery", item:"Flipchart, pads & pens, branded notepads", qty:1, status:"needed" },
+      { cat:"Other", item:"Damp ceiling repair", qty:1, status:"needed" }
+    ]},
+  "warwick": { readyToSell:false, currentAV:"TV on wall (HDMI compatibility unconfirmed)",
+    comments:"NOT READY: no corridor lighting; door key not working, cannot enter. Images to follow.",
+    items:[
+      { cat:"Connectivity", item:"HDMI cable", qty:1, status:"needed" },
+      { cat:"Connectivity", item:"USB-C connectors", qty:1, status:"needed" },
+      { cat:"Stationery", item:"Flipchart, pads & pens, branded notepads", qty:1, status:"needed" },
+      { cat:"Power", item:"Corridor lighting", qty:1, status:"needed" },
+      { cat:"Other", item:"Door key/lock repair", qty:1, status:"needed" }
+    ]},
+  "johnson": { readyToSell:null, currentAV:"To confirm", comments:"AV to be audited.", items:[] },
+  "jones": { readyToSell:null, currentAV:"To confirm", comments:"AV to be audited.", items:[] },
+  "parke": { readyToSell:null, currentAV:"To confirm", comments:"AV to be audited.", items:[] },
+  "woodlands": { readyToSell:null, currentAV:"To confirm",
+    comments:"28 theatre / up to 220 conference. AV to be audited.", items:[] }
+};
