@@ -1,1 +1,272 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#BB9979">
+<title>Brandon Hall Sales Portal</title>
+<link rel="manifest" href="manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --gold:#BB9979; --gold-dk:#9d7d5f; --gold-soft:#e8dccf;
+  --ink:#241f1b; --ink-2:#3a332c; --paper:#faf7f2; --line:#e5ddd2;
+  --muted:#8a8178; --ok:#4a7c59; --warn:#c07a3e; --card:#ffffff;
+  --shadow:0 1px 3px rgba(36,31,27,.08),0 6px 20px rgba(36,31,27,.06);
+  --serif:'Cormorant Garamond',Georgia,serif; --sans:'Inter',system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--sans);color:var(--ink);background:var(--paper);
+  font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,select,textarea{font-family:inherit;font-size:15px}
+a{color:var(--gold-dk)}
+.hidden{display:none!important}
 
+/* ---------- LOGIN ---------- */
+#login{min-height:100dvh;display:grid;place-items:center;
+  background:linear-gradient(150deg,#2a241f,#1a1613);padding:24px}
+.login-card{background:var(--card);border-radius:14px;box-shadow:var(--shadow);
+  width:100%;max-width:380px;padding:40px 34px;text-align:center}
+.login-card .logo{width:120px;margin:0 auto 8px}
+.login-card h1{font-family:var(--serif);font-size:26px;font-weight:600;
+  letter-spacing:.3px;margin-bottom:2px}
+.login-card .sub{color:var(--muted);font-size:13px;margin-bottom:26px}
+.field{text-align:left;margin-bottom:16px}
+.field label{display:block;font-size:12px;font-weight:600;color:var(--ink-2);
+  margin-bottom:6px}
+.field input{width:100%;padding:11px 13px;border:1px solid var(--line);
+  border-radius:9px;transition:border .15s;background:var(--paper)}
+.field input:focus{outline:none;border-color:var(--gold)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  padding:11px 18px;border-radius:9px;font-weight:600;font-size:14px;
+  transition:.15s;background:var(--gold);color:#fff}
+.btn:hover{background:var(--gold-dk)}
+.btn.block{width:100%}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.btn.ghost:hover{background:var(--paper);border-color:var(--gold)}
+.btn.sm{padding:7px 12px;font-size:13px}
+.login-err{color:#b3261e;font-size:13px;margin-top:12px;min-height:18px}
+.login-hint{margin-top:20px;font-size:12px;color:var(--muted);line-height:1.6}
+
+/* ---------- APP SHELL ---------- */
+#app{min-height:100dvh;display:flex;flex-direction:column}
+.topbar{display:flex;align-items:center;gap:14px;padding:12px 20px;
+  background:var(--ink);color:#fff;position:sticky;top:0;z-index:40}
+.topbar .brand{display:flex;align-items:center;gap:11px;font-family:var(--serif);
+  font-size:19px;font-weight:600}
+.topbar .brand img{width:34px;filter:brightness(0) invert(1)}
+.topbar .loc{font-size:12px;color:var(--gold-soft);font-weight:500;
+  border-left:1px solid rgba(255,255,255,.18);padding-left:14px}
+.topbar .spacer{flex:1}
+.topbar .who{font-size:13px;color:#d8cfc4}
+.topbar .who b{color:#fff}
+nav.tabs{display:flex;gap:2px;background:var(--ink-2);padding:0 12px;
+  position:sticky;top:56px;z-index:39;overflow-x:auto}
+nav.tabs button{color:#c9bfb3;padding:12px 15px;font-size:13.5px;font-weight:500;
+  border-bottom:2.5px solid transparent;white-space:nowrap;transition:.15s}
+nav.tabs button.active{color:#fff;border-bottom-color:var(--gold)}
+nav.tabs button:hover{color:#fff}
+main{flex:1;padding:24px 20px 60px;max-width:1180px;margin:0 auto;width:100%}
+.page-head{margin-bottom:20px}
+.page-head h2{font-family:var(--serif);font-size:29px;font-weight:600}
+.page-head p{color:var(--muted);font-size:14px;margin-top:2px}
+
+/* ---------- LOCATION PICKER ---------- */
+.loc-grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+.loc-card{background:var(--card);border:1px solid var(--line);border-radius:12px;
+  padding:22px;box-shadow:var(--shadow);cursor:pointer;transition:.18s;text-align:left}
+.loc-card:hover{border-color:var(--gold);transform:translateY(-2px)}
+.loc-card.soon{opacity:.5;cursor:default}
+.loc-card h3{font-family:var(--serif);font-size:22px;font-weight:600}
+.loc-card .town{color:var(--gold-dk);font-weight:600;font-size:13px;margin:2px 0 8px}
+.loc-card .addr{color:var(--muted);font-size:13px}
+
+/* ---------- ROOM GRID ---------- */
+.filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:20px;
+  background:var(--card);border:1px solid var(--line);border-radius:11px;padding:14px 16px}
+.filters .lbl{font-size:12px;font-weight:600;color:var(--ink-2)}
+.filters select,.filters input{padding:8px 11px;border:1px solid var(--line);
+  border-radius:8px;background:var(--paper)}
+.chips{display:flex;flex-wrap:wrap;gap:7px}
+.chip{padding:7px 13px;border:1px solid var(--line);border-radius:20px;font-size:13px;
+  font-weight:500;transition:.15s;background:var(--card)}
+.chip.on{background:var(--gold);color:#fff;border-color:var(--gold)}
+.room-grid{display:grid;gap:15px;grid-template-columns:repeat(auto-fill,minmax(240px,1fr))}
+.room-card{background:var(--card);border:1px solid var(--line);border-radius:12px;
+  padding:18px;box-shadow:var(--shadow);cursor:pointer;transition:.18s}
+.room-card:hover{border-color:var(--gold);transform:translateY(-2px)}
+.room-card.dim{opacity:.4}
+.room-card h3{font-family:var(--serif);font-size:21px;font-weight:600;margin-bottom:2px}
+.room-card .m2{color:var(--gold-dk);font-weight:600;font-size:13px}
+.room-card .caps{display:flex;flex-wrap:wrap;gap:5px;margin-top:11px}
+.cap-pill{background:var(--paper);border:1px solid var(--line);border-radius:6px;
+  padding:3px 8px;font-size:11.5px;color:var(--ink-2)}
+.cap-pill b{color:var(--gold-dk)}
+.room-card .fit{margin-top:11px;font-size:12.5px;font-weight:600}
+.fit.yes{color:var(--ok)} .fit.no{color:#b3261e}
+
+/* ---------- MODAL / ROOM DETAIL ---------- */
+.modal-bg{position:fixed;inset:0;background:rgba(26,22,19,.55);z-index:60;
+  display:grid;place-items:center;padding:20px;backdrop-filter:blur(2px)}
+.modal{background:var(--card);border-radius:14px;max-width:640px;width:100%;
+  max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.modal-head{padding:22px 26px;border-bottom:1px solid var(--line);
+  display:flex;align-items:flex-start;gap:12px;position:sticky;top:0;background:var(--card)}
+.modal-head h3{font-family:var(--serif);font-size:26px;font-weight:600;flex:1}
+.modal-head .close{font-size:22px;color:var(--muted);width:32px;height:32px;
+  border-radius:8px;transition:.15s}
+.modal-head .close:hover{background:var(--paper);color:var(--ink)}
+.modal-body{padding:22px 26px}
+.detail-row{display:flex;gap:20px;flex-wrap:wrap;margin-bottom:18px}
+.stat{flex:1;min-width:120px;background:var(--paper);border-radius:10px;padding:13px 15px}
+.stat .k{font-size:11px;color:var(--muted);font-weight:600;text-transform:none}
+.stat .v{font-size:20px;font-weight:600;font-family:var(--serif);color:var(--ink)}
+.stat .v small{font-size:12px;color:var(--muted);font-family:var(--sans)}
+.sec-title{font-size:13px;font-weight:700;color:var(--gold-dk);margin:20px 0 9px;
+  padding-bottom:5px;border-bottom:1px solid var(--gold-soft)}
+.cap-table{width:100%;border-collapse:collapse;font-size:14px}
+.cap-table td{padding:7px 4px;border-bottom:1px solid var(--line)}
+.cap-table td:first-child{color:var(--ink-2)}
+.cap-table td:last-child{text-align:right;font-weight:600}
+.cap-table tr.best td{color:var(--gold-dk)}
+.cap-table tr.best td:first-child::after{content:" ★";color:var(--gold)}
+.equip-list{list-style:none;display:grid;gap:6px}
+.equip-list li{display:flex;gap:8px;font-size:14px;align-items:flex-start}
+.equip-list li::before{content:"›";color:var(--gold);font-weight:700}
+.carbon-box{background:linear-gradient(135deg,#f0f5ef,#e8f0e6);border-radius:10px;
+  padding:15px;border:1px solid #d6e3d2}
+.carbon-box .big{font-size:26px;font-weight:600;font-family:var(--serif);color:var(--ok)}
+.carbon-box .split{font-size:12.5px;color:#5a6b57;margin-top:5px}
+.dummy-tag{display:inline-block;background:#fdf0e3;color:var(--warn);font-size:10.5px;
+  font-weight:700;padding:2px 7px;border-radius:5px;margin-left:8px;vertical-align:middle}
+
+/* ---------- PACKAGES ---------- */
+.pkg-grid{display:grid;gap:15px;grid-template-columns:repeat(auto-fill,minmax(270px,1fr))}
+.pkg-card{background:var(--card);border:1px solid var(--line);border-radius:12px;
+  padding:20px;box-shadow:var(--shadow)}
+.pkg-card h3{font-family:var(--serif);font-size:20px;font-weight:600}
+.pkg-card .price{font-size:15px;color:var(--gold-dk);font-weight:600;margin:3px 0 12px}
+.pkg-card .price b{font-size:24px}
+.pkg-card ul{list-style:none;display:grid;gap:5px;font-size:13.5px}
+.pkg-card li{display:flex;gap:7px}.pkg-card li::before{content:"✓";color:var(--ok);font-weight:700}
+.pkg-card .min{margin-top:11px;font-size:12px;color:var(--muted)}
+
+/* ---------- ENQUIRIES ---------- */
+.enq-wrap{display:grid;gap:16px}
+.enq-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.enq-toolbar .spacer{flex:1}
+.enq-cols{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
+.enq-col h4{font-size:13px;font-weight:700;color:var(--ink-2);margin-bottom:9px;
+  display:flex;justify-content:space-between}
+.enq-col h4 span{background:var(--gold-soft);color:var(--gold-dk);border-radius:12px;
+  padding:1px 9px;font-size:12px}
+.enq-card{background:var(--card);border:1px solid var(--line);border-radius:10px;
+  padding:13px 14px;margin-bottom:10px;box-shadow:var(--shadow);cursor:pointer;transition:.15s}
+.enq-card:hover{border-color:var(--gold)}
+.enq-card .nm{font-weight:600;font-size:14.5px}
+.enq-card .meta{font-size:12px;color:var(--muted);margin-top:3px}
+.enq-card .tags{display:flex;gap:5px;margin-top:8px;flex-wrap:wrap}
+.tag{font-size:11px;background:var(--paper);border:1px solid var(--line);
+  border-radius:5px;padding:2px 7px;color:var(--ink-2)}
+
+/* ---------- FORMS / QUOTE ---------- */
+.form-grid{display:grid;gap:14px;grid-template-columns:1fr 1fr;max-width:720px}
+.form-grid .full{grid-column:1/-1}
+.form-grid label{display:block;font-size:12px;font-weight:600;color:var(--ink-2);margin-bottom:5px}
+.form-grid input,.form-grid select,.form-grid textarea{width:100%;padding:10px 12px;
+  border:1px solid var(--line);border-radius:8px;background:var(--paper)}
+.form-grid input:focus,.form-grid select:focus,.form-grid textarea:focus{outline:none;border-color:var(--gold)}
+.quote-layout{display:grid;gap:22px;grid-template-columns:1.15fr .85fr;align-items:start}
+.quote-panel{background:var(--card);border:1px solid var(--line);border-radius:12px;
+  padding:20px;box-shadow:var(--shadow)}
+.quote-panel h3{font-family:var(--serif);font-size:20px;margin-bottom:14px}
+.addon-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:14px}
+.addon-row .an{flex:1}.addon-row .ap{color:var(--muted);font-size:13px;width:70px;text-align:right}
+.addon-row input[type=number]{width:56px;padding:5px 7px;border:1px solid var(--line);border-radius:6px;text-align:center}
+.quote-summary{position:sticky;top:110px}
+.qs-line{display:flex;justify-content:space-between;padding:6px 0;font-size:14px}
+.qs-line.total{border-top:2px solid var(--ink);margin-top:8px;padding-top:10px;
+  font-size:19px;font-weight:700;font-family:var(--serif)}
+.qs-sub{color:var(--muted);font-size:12px}
+.carbon-quote{background:#eef5ec;border-radius:8px;padding:10px 12px;margin-top:12px;
+  font-size:13px;color:#4a6147}.carbon-quote b{font-size:16px}
+
+/* ---------- ADMIN ---------- */
+.admin-note{background:#fdf0e3;border:1px solid #f0d9bf;border-radius:10px;
+  padding:14px 16px;font-size:13.5px;color:#7a5a2e;margin-bottom:18px}
+.data-table{width:100%;border-collapse:collapse;background:var(--card);
+  border-radius:10px;overflow:hidden;box-shadow:var(--shadow);font-size:13.5px}
+.data-table th{background:var(--ink);color:#fff;text-align:left;padding:10px 12px;font-weight:600}
+.data-table td{padding:9px 12px;border-bottom:1px solid var(--line)}
+.data-table tr:hover td{background:var(--paper)}
+
+.empty{text-align:center;padding:50px 20px;color:var(--muted)}
+.empty .big{font-family:var(--serif);font-size:22px;color:var(--ink-2);margin-bottom:6px}
+
+@media(max-width:760px){
+  .quote-layout{grid-template-columns:1fr}
+  .quote-summary{position:static}
+  .form-grid{grid-template-columns:1fr}
+  main{padding:18px 14px 50px}
+  .page-head h2{font-size:24px}
+}
+</style>
+</head>
+<body>
+
+<!-- ================= LOGIN ================= -->
+<div id="login">
+  <div class="login-card">
+    <img class="logo" src="assets/bh-logo.svg" alt="Brandon Hall">
+    <h1>Brandon Hall</h1>
+    <div class="sub">Sales &amp; Marketing Portal</div>
+    <div class="field">
+      <label for="lg-user">Team member</label>
+      <select id="lg-user" style="width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:9px;background:var(--paper)">
+        <option value="">Select your name…</option>
+        <option value="ajay.kawa">Ajay Kawa</option>
+        <option value="raj.kumar">Raj Kumar</option>
+        <option value="alia.taub">Alia Taub</option>
+        <option value="nicola.cartwright">Nicola Cartwright</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="lg-pw">Access code</label>
+      <input id="lg-pw" type="password" placeholder="BH + your initials" autocomplete="off">
+    </div>
+    <button class="btn block" id="lg-btn">Sign in</button>
+    <div class="login-err" id="lg-err"></div>
+    <div class="login-hint">Your access code is <b>BH</b> followed by your initials.<br>Runs in demo mode until Firebase is connected.</div>
+  </div>
+</div>
+
+<!-- ================= APP ================= -->
+<div id="app" class="hidden">
+  <header class="topbar">
+    <div class="brand"><img src="assets/bh-logo.svg" alt=""> Brandon Hall</div>
+    <div class="loc" id="tb-loc">Brandon Hall · Coventry</div>
+    <div class="spacer"></div>
+    <div class="who">Signed in as <b id="tb-who">—</b></div>
+    <button class="btn ghost sm" id="tb-logout">Sign out</button>
+  </header>
+  <nav class="tabs" id="tabs">
+    <button data-tab="rooms" class="active">Rooms</button>
+    <button data-tab="packages">Packages</button>
+    <button data-tab="quote">Create Quote</button>
+    <button data-tab="enquiries">Enquiries</button>
+    <button data-tab="admin">Admin</button>
+  </nav>
+  <main id="view"></main>
+</div>
+
+<div id="modal-root"></div>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));}</script>
+</body>
+</html>

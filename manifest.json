@@ -1,0 +1,13 @@
+{
+  "name": "Brandon Hall Sales Portal",
+  "short_name": "BH Portal",
+  "description": "Sales & marketing portal for Brandon Hall Hotel & Spa",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#1a1a1a",
+  "theme_color": "#BB9979",
+  "icons": [
+    { "src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

@@ -1,0 +1,459 @@
+/* ============================================================
+   BRANDON HALL SALES PORTAL — app logic
+   Runs in DEMO MODE (localStorage) until Firebase is wired up.
+   To enable Firebase: fill firebase-config.js, uncomment the
+   Firebase SDK block in index.html, and set USE_FIREBASE=true.
+   ============================================================ */
+const USE_FIREBASE = false;
+
+const USERS = {
+  "ajay.kawa":        { name:"Ajay Kawa",        code:"BHAK", role:"admin" },
+  "raj.kumar":        { name:"Raj Kumar",        code:"BHRK", role:"admin" },
+  "alia.taub":        { name:"Alia Taub",        code:"BHAT", role:"admin" },
+  "nicola.cartwright":{ name:"Nicola Cartwright", code:"BHNC", role:"admin" }
+};
+
+const LAYOUT_LABELS = { boardroom:"Boardroom", ushape:"U-Shape",
+  theatre:"Theatre", cabaret:"Cabaret", reception:"Reception" };
+
+const $  = s => document.querySelector(s);
+const el = (t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e;};
+const money = n => "£"+Number(n).toLocaleString("en-GB",{minimumFractionDigits:0,maximumFractionDigits:2});
+
+/* ---------- simple demo store ---------- */
+const Store = {
+  key:"bh_enquiries",
+  all(){ try{return JSON.parse(localStorage.getItem(this.key))||[]}catch{return[]} },
+  save(list){ localStorage.setItem(this.key, JSON.stringify(list)); },
+  add(e){ const l=this.all(); e.id="ENQ-"+Date.now().toString(36).toUpperCase();
+    e.created=new Date().toISOString(); e.status=e.status||"new"; l.unshift(e); this.save(l); return e; },
+  update(id,patch){ const l=this.all(); const i=l.findIndex(x=>x.id===id);
+    if(i>-1){ Object.assign(l[i],patch); this.save(l);} }
+};
+
+let SESSION=null, CURRENT_TAB="rooms";
+
+/* ============================================================ AUTH */
+$("#lg-btn").onclick = ()=>{
+  const u=$("#lg-user").value, pw=$("#lg-pw").value.trim().toUpperCase();
+  const err=$("#lg-err"); err.textContent="";
+  if(!u){ err.textContent="Please select your name."; return; }
+  const user=USERS[u];
+  if(!user || pw!==user.code){ err.textContent="Incorrect access code."; return; }
+  SESSION=user;
+  $("#login").classList.add("hidden");
+  $("#app").classList.remove("hidden");
+  $("#tb-who").textContent=user.name;
+  boot();
+};
+$("#lg-pw").addEventListener("keydown",e=>{ if(e.key==="Enter")$("#lg-btn").click(); });
+$("#tb-logout").onclick=()=>{ SESSION=null; $("#app").classList.add("hidden");
+  $("#login").classList.remove("hidden"); $("#lg-pw").value=""; };
+
+/* ============================================================ ROUTING */
+function boot(){
+  document.querySelectorAll("#tabs button").forEach(b=>{
+    b.onclick=()=>{ CURRENT_TAB=b.dataset.tab;
+      document.querySelectorAll("#tabs button").forEach(x=>x.classList.toggle("active",x===b));
+      render(); };
+  });
+  // hide admin tab for non-admins (all 4 are admin for now)
+  render();
+}
+function render(){
+  const v=$("#view"); v.innerHTML="";
+  ({rooms:renderRooms, packages:renderPackages, quote:renderQuote,
+    enquiries:renderEnquiries, admin:renderAdmin }[CURRENT_TAB]||renderRooms)(v);
+}
+
+/* ============================================================ ROOMS */
+let roomFilter={ event:"", pax:"" };
+function renderRooms(v){
+  v.appendChild(head("Meeting & Event Rooms",
+    "Pick an event type and headcount to see which rooms fit and how to lay them out."));
+
+  const bar=el("div","filters");
+  bar.innerHTML=`<span class="lbl">Event type</span>`;
+  const chips=el("div","chips");
+  chips.appendChild(makeChip("All events","",roomFilter.event===""));
+  EVENT_TYPES.forEach(et=>chips.appendChild(makeChip(et.icon+" "+et.label,et.id,roomFilter.event===et.id)));
+  chips.querySelectorAll(".chip").forEach(c=>c.onclick=()=>{roomFilter.event=c.dataset.val;renderRooms(v);});
+  bar.appendChild(chips);
+  const paxWrap=el("div","",`<span class="lbl" style="margin-right:8px">Guests</span>`);
+  const pax=el("input"); pax.type="number"; pax.min=0; pax.placeholder="e.g. 40";
+  pax.value=roomFilter.pax; pax.style.width="90px";
+  pax.oninput=()=>{roomFilter.pax=pax.value;refreshRoomFit(v);};
+  paxWrap.appendChild(pax); bar.appendChild(paxWrap);
+  v.appendChild(bar);
+
+  const grid=el("div","room-grid"); grid.id="room-grid";
+  ROOMS.forEach(r=>grid.appendChild(roomCard(r)));
+  v.appendChild(grid);
+  refreshRoomFit(v);
+}
+function makeChip(label,val,on){ const c=el("button","chip"+(on?" on":""),label); c.dataset.val=val; return c; }
+
+function bestLayout(room,eventId){
+  const et=EVENT_TYPES.find(e=>e.id===eventId);
+  const order= et? et.preferredLayouts : ["theatre","cabaret","reception","boardroom","ushape"];
+  for(const lay of order){ if(room.cap[lay]) return lay; }
+  return Object.keys(room.cap).find(k=>room.cap[k])||"reception";
+}
+function maxCap(room){ return Math.max(...Object.values(room.cap).filter(n=>n!=null)); }
+
+function roomCard(r){
+  const c=el("div","room-card"); c.dataset.id=r.id;
+  const caps=Object.entries(r.cap).filter(([,n])=>n!=null&&n>0)
+    .map(([k,n])=>`<span class="cap-pill"><b>${n}</b> ${LAYOUT_LABELS[k]}</span>`).join("");
+  c.innerHTML=`<h3>${r.name}</h3><div class="m2">${r.m2} m²${r.combined?" · "+r.combined:""}</div>
+    <div class="caps">${caps}</div><div class="fit" data-fit></div>`;
+  c.onclick=()=>openRoom(r);
+  return c;
+}
+function refreshRoomFit(v){
+  const pax=parseInt(roomFilter.pax)||0;
+  document.querySelectorAll(".room-card").forEach(card=>{
+    const r=ROOMS.find(x=>x.id===card.dataset.id); const fit=card.querySelector("[data-fit]");
+    if(!pax){ fit.textContent=""; card.classList.remove("dim"); return; }
+    const lay=bestLayout(r,roomFilter.event); const cap=r.cap[lay]||maxCap(r);
+    if(maxCap(r)>=pax){ fit.className="fit yes";
+      fit.textContent=`✓ Fits ${pax} — best as ${LAYOUT_LABELS[lay]} (${cap})`; card.classList.remove("dim"); }
+    else { fit.className="fit no"; fit.textContent=`✗ Max ${maxCap(r)} — too small`; card.classList.add("dim"); }
+  });
+}
+
+function openRoom(r){
+  const pax=parseInt(roomFilter.pax)||Math.round(maxCap(r)*0.6);
+  const evId=roomFilter.event||"meeting";
+  const et=EVENT_TYPES.find(e=>e.id===evId);
+  const lay=bestLayout(r,evId);
+  const carbon=carbonModel(r,evId,pax);
+  const equip=EVENT_EQUIPMENT[evId]||[];
+  const hire=ROOM_HIRE[r.id];
+
+  const caps=Object.entries(r.cap).filter(([,n])=>n!=null).map(([k,n])=>
+    `<tr class="${k===lay?"best":""}"><td>${LAYOUT_LABELS[k]}</td><td>${n||"—"}</td></tr>`).join("");
+
+  const body=`
+    <div class="detail-row">
+      <div class="stat"><div class="k">Floor area</div><div class="v">${r.m2}<small> m²</small></div></div>
+      ${r.length?`<div class="stat"><div class="k">Dimensions</div><div class="v">${r.length}<small>×</small>${r.width}<small> m</small></div></div>`:""}
+      <div class="stat"><div class="k">Max capacity</div><div class="v">${maxCap(r)}</div></div>
+      ${hire?`<div class="stat"><div class="k">Room hire</div><div class="v">${money(hire.full)}<small>/day</small></div></div>`:""}
+    </div>
+
+    <div class="sec-title">Recommended for ${et.icon} ${et.label}</div>
+    <p style="font-size:14px;margin-bottom:6px">Best laid out as <b>${LAYOUT_LABELS[lay]}</b> (seats ${r.cap[lay]||maxCap(r)}).</p>
+
+    <div class="sec-title">Capacity by layout</div>
+    <table class="cap-table">${caps}</table>
+
+    <div class="sec-title">Recommended equipment <span class="dummy-tag">DUMMY — awaiting M&E audit</span></div>
+    <ul class="equip-list">${equip.map(e=>`<li>${e}</li>`).join("")}</ul>
+
+    <div class="sec-title">Estimated carbon footprint</div>
+    <div class="carbon-box">
+      <div class="big">${carbon.total} kg CO₂e</div>
+      <div class="split">Room energy ≈ ${carbon.room} kg · Catering ≈ ${carbon.catering} kg
+        (${carbon.perHead} kg/head × ${pax} guests)</div>
+      <div class="split" style="margin-top:6px;font-style:italic">Estimated from floor area, occupancy &amp; event type — indicative only.</div>
+    </div>
+
+    <div style="margin-top:22px;display:flex;gap:10px">
+      <button class="btn" id="rm-quote">Start a quote for this room</button>
+      <button class="btn ghost" id="rm-enq">Log an enquiry</button>
+    </div>`;
+  showModal(r.name, `${r.m2} m² · ${r.combined||"Function room"}`, body);
+  $("#rm-quote").onclick=()=>{ closeModal(); prefill={room:r.id,event:evId,pax}; CURRENT_TAB="quote";
+    document.querySelectorAll("#tabs button").forEach(x=>x.classList.toggle("active",x.dataset.tab==="quote")); render(); };
+  $("#rm-enq").onclick=()=>{ closeModal(); openEnquiryForm({room:r.id,event:evId}); };
+}
+
+/* ============================================================ PACKAGES */
+function renderPackages(v){
+  v.appendChild(head("Packages & Pricing","Delegate rates, event packages and à la carte add-ons. All prices include VAT unless noted."));
+  const grid=el("div","pkg-grid");
+  PACKAGES.forEach(p=>{
+    const card=el("div","pkg-card");
+    card.innerHTML=`<h3>${p.name}</h3>
+      <div class="price">from <b>${money(p.from)}</b> ${p.per==="pp"?"per person":""}</div>
+      <ul>${p.includes.map(i=>`<li>${i}</li>`).join("")}</ul>
+      <div class="min">Minimum ${p.min} ${p.min>1?"guests":"guest"}</div>`;
+    grid.appendChild(card);
+  });
+  v.appendChild(grid);
+
+  // add-ons
+  v.appendChild(el("div","sec-title",`À la carte add-ons`));
+  ADDONS.forEach(group=>{
+    v.appendChild(el("h4","",`<span style="font-family:var(--serif);font-size:18px;color:var(--gold-dk);display:block;margin:14px 0 8px">${group.cat}</span>`));
+    const t=el("table","data-table");
+    t.innerHTML=`<tr><th>Item</th><th style="text-align:right">Price</th><th>Per</th></tr>`+
+      group.items.map(i=>`<tr><td>${i.name}${i.note?` <span class="qs-sub">(${i.note})</span>`:""}</td>
+        <td style="text-align:right">${money(i.price)}</td><td>${i.unit}</td></tr>`).join("");
+    v.appendChild(t);
+  });
+}
+
+/* ============================================================ QUOTE BUILDER */
+let prefill=null;
+function renderQuote(v){
+  v.appendChild(head("Create a Quote","Build a costed quote and download a branded PDF to email the customer."));
+  const wrap=el("div","quote-layout");
+
+  // left: form
+  const left=el("div","quote-panel");
+  left.innerHTML=`<h3>Event details</h3>
+    <div class="form-grid">
+      <div><label>Customer name</label><input id="q-name" placeholder="Full name"></div>
+      <div><label>Company (optional)</label><input id="q-co" placeholder="Company"></div>
+      <div><label>Email</label><input id="q-email" type="email" placeholder="name@email.com"></div>
+      <div><label>Phone</label><input id="q-phone" placeholder="Phone"></div>
+      <div><label>Event type</label><select id="q-event">${EVENT_TYPES.map(e=>`<option value="${e.id}">${e.label}</option>`).join("")}</select></div>
+      <div><label>Event date</label><input id="q-date" type="date"></div>
+      <div><label>Room</label><select id="q-room">${ROOMS.map(r=>`<option value="${r.id}">${r.name} (${r.m2}m²)</option>`).join("")}</select></div>
+      <div><label>Guests</label><input id="q-pax" type="number" min="1" value="40"></div>
+      <div><label>Package</label><select id="q-pkg"><option value="">Room hire only</option>${PACKAGES.map(p=>`<option value="${p.id}">${p.name} (from ${money(p.from)}pp)</option>`).join("")}</select></div>
+      <div><label>Hire basis</label><select id="q-hire"><option value="full">Full day</option><option value="half">Half day</option><option value="none">None (package incl.)</option></select></div>
+    </div>
+    <h3 style="margin-top:22px">Add-ons</h3>
+    <div id="q-addons"></div>`;
+  wrap.appendChild(left);
+
+  // right: summary
+  const right=el("div","quote-panel quote-summary");
+  right.innerHTML=`<h3>Quote summary</h3><div id="q-summary"></div>
+    <button class="btn block" id="q-pdf" style="margin-top:16px">Download PDF quote</button>
+    <button class="btn ghost block" id="q-save" style="margin-top:8px">Save as enquiry</button>`;
+  wrap.appendChild(right);
+  v.appendChild(wrap);
+
+  // add-ons list
+  const ad=$("#q-addons");
+  ADDONS.forEach(g=>{
+    ad.appendChild(el("div","qs-sub",`<b style="color:var(--gold-dk)">${g.cat}</b>`));
+    g.items.forEach((item,idx)=>{
+      const key=g.cat+"|"+idx;
+      const row=el("div","addon-row");
+      row.innerHTML=`<span class="an">${item.name}</span><span class="ap">${money(item.price)}/${item.unit}</span>`;
+      const qty=el("input"); qty.type="number"; qty.min=0; qty.value=0; qty.dataset.key=key;
+      qty.dataset.price=item.price; qty.dataset.name=item.name; qty.dataset.unit=item.unit;
+      qty.oninput=recalcQuote; row.appendChild(qty); ad.appendChild(row);
+    });
+  });
+
+  ["q-event","q-room","q-pax","q-pkg","q-hire"].forEach(id=>$("#"+id).addEventListener("change",recalcQuote));
+  $("#q-pax").addEventListener("input",recalcQuote);
+  if(prefill){ $("#q-room").value=prefill.room; $("#q-event").value=prefill.event; $("#q-pax").value=prefill.pax; prefill=null; }
+  recalcQuote();
+  $("#q-pdf").onclick=downloadQuotePDF;
+  $("#q-save").onclick=saveQuoteAsEnquiry;
+}
+
+function gatherQuote(){
+  const room=ROOMS.find(r=>r.id===$("#q-room").value);
+  const evId=$("#q-event").value, pax=parseInt($("#q-pax").value)||0;
+  const pkg=PACKAGES.find(p=>p.id===$("#q-pkg").value);
+  const hireBasis=$("#q-hire").value;
+  const lines=[];
+  if(pkg){ lines.push({label:`${pkg.name} × ${pax} guests`, amt:pkg.from*pax, sub:`${money(pkg.from)}pp`}); }
+  if(hireBasis!=="none" && ROOM_HIRE[room.id]){
+    const h=ROOM_HIRE[room.id][hireBasis];
+    lines.push({label:`Room hire — ${room.name} (${hireBasis} day)`, amt:h});
+  }
+  document.querySelectorAll("#q-addons input").forEach(q=>{
+    const n=parseInt(q.value)||0; if(n>0){
+      const price=parseFloat(q.dataset.price);
+      const mult = q.dataset.unit==="pp" ? n : n; // qty entered directly
+      lines.push({label:`${q.dataset.name} × ${n} ${q.dataset.unit}`, amt:price*n});
+    }
+  });
+  const subtotal=lines.reduce((s,l)=>s+l.amt,0);
+  const carbon=carbonModel(room,evId,pax);
+  return {room,evId,pax,pkg,lines,subtotal,carbon,
+    customer:{ name:$("#q-name")?.value||"", co:$("#q-co")?.value||"",
+      email:$("#q-email")?.value||"", phone:$("#q-phone")?.value||"",
+      date:$("#q-date")?.value||"" }};
+}
+function recalcQuote(){
+  const q=gatherQuote(); const s=$("#q-summary"); if(!s)return;
+  s.innerHTML = q.lines.length
+    ? q.lines.map(l=>`<div class="qs-line"><span>${l.label}${l.sub?` <span class="qs-sub">${l.sub}</span>`:""}</span><span>${money(l.amt)}</span></div>`).join("")
+      +`<div class="qs-line total"><span>Total</span><span>${money(q.subtotal)}</span></div>
+        <div class="qs-sub">Prices include VAT where applicable.</div>
+        <div class="carbon-quote">Estimated carbon: <b>${q.carbon.total} kg CO₂e</b> for this event</div>`
+    : `<div class="qs-sub">Add a package, room hire or add-ons to build the quote.</div>`;
+}
+
+/* ============================================================ QUOTE PDF (print-to-PDF) */
+function downloadQuotePDF(){
+  const q=gatherQuote();
+  if(!q.customer.name){ alert("Please enter the customer name first."); return; }
+  const et=EVENT_TYPES.find(e=>e.id===q.evId);
+  const ref="BH-Q-"+Date.now().toString(36).toUpperCase();
+  const win=window.open("","_blank");
+  const rows=q.lines.map(l=>`<tr><td>${l.label}</td><td style="text-align:right">${money(l.amt)}</td></tr>`).join("");
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${ref}</title>
+    <style>
+      @page{margin:22mm}
+      body{font-family:'Inter',Arial,sans-serif;color:#241f1b;font-size:12px;line-height:1.5}
+      .top{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #BB9979;padding-bottom:14px}
+      h1{font-family:'Cormorant Garamond',Georgia,serif;font-size:26px;color:#241f1b;margin:0}
+      .muted{color:#8a8178;font-size:11px}
+      h2{font-family:'Cormorant Garamond',serif;font-size:18px;margin:22px 0 8px;color:#9d7d5f}
+      table{width:100%;border-collapse:collapse;margin-top:6px}
+      td,th{padding:8px 6px;border-bottom:1px solid #e5ddd2;text-align:left}
+      .total td{border-top:2px solid #241f1b;font-weight:700;font-size:15px;border-bottom:none}
+      .grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;margin-top:8px}
+      .grid div{font-size:12px}.grid b{color:#3a332c}
+      .carbon{background:#eef5ec;border-radius:8px;padding:10px 14px;margin-top:16px;color:#4a6147;font-size:12px}
+      .foot{margin-top:30px;font-size:10.5px;color:#8a8178;border-top:1px solid #e5ddd2;padding-top:12px}
+    </style></head><body>
+    <div class="top">
+      <div><h1>Brandon Hall Hotel &amp; Spa</h1><div class="muted">Main Street, Brandon, Coventry CV8 3FW</div></div>
+      <div style="text-align:right"><div class="muted">Quotation</div><b>${ref}</b><br><span class="muted">${new Date().toLocaleDateString("en-GB")}</span></div>
+    </div>
+    <h2>Prepared for</h2>
+    <div class="grid">
+      <div><b>${q.customer.name}</b></div><div>${q.customer.co||""}</div>
+      <div>${q.customer.email||""}</div><div>${q.customer.phone||""}</div>
+    </div>
+    <h2>Event</h2>
+    <div class="grid">
+      <div><b>Type:</b> ${et.label}</div><div><b>Date:</b> ${q.customer.date?new Date(q.customer.date).toLocaleDateString("en-GB"):"TBC"}</div>
+      <div><b>Room:</b> ${q.room.name} (${q.room.m2} m²)</div><div><b>Guests:</b> ${q.pax}</div>
+    </div>
+    <h2>Costs</h2>
+    <table>${rows}<tr class="total"><td>Total (inc. VAT where applicable)</td><td style="text-align:right">${money(q.subtotal)}</td></tr></table>
+    <div class="carbon">Estimated event carbon footprint: <b>${q.carbon.total} kg CO₂e</b> — indicative estimate from room size, occupancy and event type.</div>
+    <div class="foot">This quotation is valid for 14 days and subject to availability. Prices include VAT at the current rate unless otherwise stated. Rates are non-commissionable. Cancellation terms are per individual contract.<br>
+    Brandon Hall Hotel &amp; Spa · Sales: nicola.cartwright@brandonhallhotelandspa.com</div>
+    <script>window.onload=()=>window.print()<\/script>
+    </body></html>`);
+  win.document.close();
+}
+
+function saveQuoteAsEnquiry(){
+  const q=gatherQuote();
+  if(!q.customer.name){ alert("Please enter the customer name first."); return; }
+  Store.add({ name:q.customer.name, email:q.customer.email, phone:q.customer.phone,
+    company:q.customer.co, event:q.evId, room:q.room.id, pax:q.pax, date:q.customer.date,
+    value:q.subtotal, status:"quoted", source:"quote builder", notes:`Quote built: ${money(q.subtotal)}` });
+  alert("Saved to the enquiry dashboard.");
+}
+
+/* ============================================================ ENQUIRIES */
+const ENQ_STAGES=[["new","New"],["contacted","Contacted"],["quoted","Quoted"],["won","Won"],["lost","Lost"]];
+function renderEnquiries(v){
+  const head1=head("Enquiries","Every enquiry captured through the portal or shared form.");
+  v.appendChild(head1);
+  const tb=el("div","enq-toolbar");
+  tb.innerHTML=`<button class="btn" id="enq-new">+ New enquiry</button>
+    <button class="btn ghost" id="enq-link">Copy shareable form link</button><div class="spacer"></div>`;
+  v.appendChild(tb);
+  $("#enq-new").onclick=()=>openEnquiryForm({});
+  $("#enq-link").onclick=()=>{ const url=location.href.split("#")[0]+"#enquire";
+    navigator.clipboard?.writeText(url); alert("Shareable enquiry link copied:\n"+url+"\n\n(Public form — customers can submit without logging in.)"); };
+
+  const list=Store.all();
+  if(!list.length){ v.appendChild(el("div","empty",`<div class="big">No enquiries yet</div>
+    Log one manually, or share the enquiry form link with customers.`)); return; }
+
+  const cols=el("div","enq-cols");
+  ENQ_STAGES.forEach(([sid,slabel])=>{
+    const items=list.filter(e=>e.status===sid);
+    const col=el("div","enq-col");
+    col.innerHTML=`<h4>${slabel} <span>${items.length}</span></h4>`;
+    items.forEach(e=>{
+      const room=ROOMS.find(r=>r.id===e.room);
+      const et=EVENT_TYPES.find(t=>t.id===e.event);
+      const card=el("div","enq-card");
+      card.innerHTML=`<div class="nm">${e.name}</div>
+        <div class="meta">${et?et.label:"—"} · ${e.pax||"?"} guests${e.date?" · "+new Date(e.date).toLocaleDateString("en-GB"):""}</div>
+        <div class="tags">${room?`<span class="tag">${room.name}</span>`:""}${e.value?`<span class="tag">${money(e.value)}</span>`:""}<span class="tag">${e.source||"manual"}</span></div>`;
+      card.onclick=()=>openEnquiryDetail(e);
+      col.appendChild(card);
+    });
+    cols.appendChild(col);
+  });
+  v.appendChild(cols);
+}
+function openEnquiryForm(pre){
+  const body=`<div class="form-grid">
+    <div><label>Name *</label><input id="e-name" placeholder="Customer name"></div>
+    <div><label>Company</label><input id="e-co"></div>
+    <div><label>Email</label><input id="e-email" type="email"></div>
+    <div><label>Phone</label><input id="e-phone"></div>
+    <div><label>Event type</label><select id="e-event">${EVENT_TYPES.map(t=>`<option value="${t.id}" ${pre.event===t.id?"selected":""}>${t.label}</option>`).join("")}</select></div>
+    <div><label>Preferred date</label><input id="e-date" type="date"></div>
+    <div><label>Room of interest</label><select id="e-room"><option value="">Any / unsure</option>${ROOMS.map(r=>`<option value="${r.id}" ${pre.room===r.id?"selected":""}>${r.name}</option>`).join("")}</select></div>
+    <div><label>Guests</label><input id="e-pax" type="number" min="1"></div>
+    <div class="full"><label>Notes</label><textarea id="e-notes" rows="3" placeholder="Requirements, budget, questions…"></textarea></div>
+  </div>
+  <div style="margin-top:18px"><button class="btn" id="e-submit">Save enquiry</button></div>`;
+  showModal("New enquiry","Capture a customer enquiry",body);
+  $("#e-submit").onclick=()=>{
+    const name=$("#e-name").value.trim();
+    if(!name){ $("#e-name").focus(); return; }
+    Store.add({ name, company:$("#e-co").value, email:$("#e-email").value, phone:$("#e-phone").value,
+      event:$("#e-event").value, date:$("#e-date").value, room:$("#e-room").value,
+      pax:parseInt($("#e-pax").value)||null, notes:$("#e-notes").value, source:"manual" });
+    closeModal(); render();
+  };
+}
+function openEnquiryDetail(e){
+  const room=ROOMS.find(r=>r.id===e.room); const et=EVENT_TYPES.find(t=>t.id===e.event);
+  const body=`<div class="detail-row">
+      <div class="stat"><div class="k">Event</div><div class="v" style="font-size:16px">${et?et.label:"—"}</div></div>
+      <div class="stat"><div class="k">Guests</div><div class="v">${e.pax||"—"}</div></div>
+      <div class="stat"><div class="k">Room</div><div class="v" style="font-size:16px">${room?room.name:"Any"}</div></div>
+    </div>
+    <div class="sec-title">Contact</div>
+    <p style="font-size:14px">${e.email||"—"} · ${e.phone||"—"} ${e.company?" · "+e.company:""}</p>
+    ${e.notes?`<div class="sec-title">Notes</div><p style="font-size:14px">${e.notes}</p>`:""}
+    <div class="sec-title">Move to stage</div>
+    <div class="chips" id="stage-chips">${ENQ_STAGES.map(([s,l])=>`<button class="chip ${e.status===s?"on":""}" data-s="${s}">${l}</button>`).join("")}</div>
+    <div class="qs-sub" style="margin-top:14px">Ref ${e.id} · logged ${new Date(e.created).toLocaleString("en-GB")}</div>`;
+  showModal(e.name, e.source==="quote builder"?"From quote builder":"Enquiry", body);
+  document.querySelectorAll("#stage-chips .chip").forEach(c=>c.onclick=()=>{
+    Store.update(e.id,{status:c.dataset.s}); closeModal(); render();
+  });
+}
+
+/* ============================================================ ADMIN */
+function renderAdmin(v){
+  v.appendChild(head("Admin","Reference data currently loaded. Editable data tables and M&E audit import land here."));
+  v.appendChild(el("div","admin-note",
+    `<b>Demo mode.</b> Rooms, hire rates and packages are read from <code>data.js</code>.
+     Equipment recommendations are placeholders pending the M&amp;E audit — once you upload it,
+     these become editable tables saved to Firebase. Enquiries are currently stored in this browser only.`));
+
+  v.appendChild(el("div","sec-title","Users"));
+  const ut=el("table","data-table");
+  ut.innerHTML=`<tr><th>Name</th><th>Access code</th><th>Role</th></tr>`+
+    Object.values(USERS).map(u=>`<tr><td>${u.name}</td><td>${u.code}</td><td>${u.role}</td></tr>`).join("");
+  v.appendChild(ut);
+
+  v.appendChild(el("div","sec-title","Rooms & hire rates"));
+  const rt=el("table","data-table");
+  rt.innerHTML=`<tr><th>Room</th><th>m²</th><th>Max cap</th><th>Half day</th><th>Full day</th></tr>`+
+    ROOMS.map(r=>{const h=ROOM_HIRE[r.id]||{};
+      return `<tr><td>${r.name}</td><td>${r.m2}</td><td>${maxCap(r)}</td><td>${h.half?money(h.half):"—"}</td><td>${h.full?money(h.full):"—"}</td></tr>`;}).join("");
+  v.appendChild(rt);
+}
+
+/* ============================================================ HELPERS */
+function head(title,sub){ const h=el("div","page-head"); h.innerHTML=`<h2>${title}</h2>${sub?`<p>${sub}</p>`:""}`; return h; }
+function showModal(title,sub,bodyHTML){
+  const root=$("#modal-root");
+  root.innerHTML=`<div class="modal-bg"><div class="modal">
+    <div class="modal-head"><div><h3>${title}</h3><div class="qs-sub">${sub||""}</div></div>
+    <button class="close">×</button></div>
+    <div class="modal-body">${bodyHTML}</div></div></div>`;
+  root.querySelector(".close").onclick=closeModal;
+  root.querySelector(".modal-bg").onclick=e=>{ if(e.target.classList.contains("modal-bg"))closeModal(); };
+}
+function closeModal(){ $("#modal-root").innerHTML=""; }
+
+/* public enquiry deep-link (#enquire) — opens form pre-login later; for now requires login */
+if(location.hash==="#enquire"){ /* handled after login in future */ }
