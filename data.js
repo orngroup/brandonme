@@ -27,17 +27,17 @@ const ROOMS = [
   { id:"brandon-2",     name:"Brandon 2",      m2:76,  length:9.23, width:6.08, cap:{ boardroom:36, ushape:30, theatre:40, cabaret:60,  reception:100 } },
   { id:"brandon-suite", name:"Brandon Suite",  m2:130, length:null, width:null, combined:"Brandon 1 + Brandon 2", cap:{ boardroom:36, ushape:30, theatre:40, cabaret:90, reception:100 } },
   { id:"hunt",          name:"Hunt",           m2:49,  length:6.63, width:5.33, cap:{ boardroom:14, ushape:12, theatre:12, cabaret:0,   reception:25 } },
-  { id:"johnson",       name:"Johnson",        m2:23,  length:null, width:null, cap:{ boardroom:10, ushape:10, theatre:10, cabaret:null,reception:10 } },
-  { id:"jones",         name:"Jones",          m2:40,  length:null, width:null, cap:{ boardroom:14, ushape:10, theatre:10, cabaret:null,reception:20 } },
-  { id:"parke",         name:"Parke",          m2:40,  length:null, width:null, cap:{ boardroom:17, ushape:16, theatre:16, cabaret:null,reception:40 } },
+  { id:"johnson",       name:"Johnson",        m2:23,  length:5.08, width:4.22, cap:{ boardroom:10, ushape:10, theatre:10, cabaret:null,reception:10 } },
+  { id:"jones",         name:"Jones",          m2:40,  length:8.20, width:4.88, cap:{ boardroom:14, ushape:10, theatre:10, cabaret:null,reception:20 } },
+  { id:"parke",         name:"Parke",          m2:40,  length:6.98, width:6.67, cap:{ boardroom:17, ushape:16, theatre:16, cabaret:null,reception:40 } },
   { id:"warwick",       name:"Warwick",        m2:27,  length:5.7,  width:4.65, cap:{ boardroom:10, ushape:10, theatre:12, cabaret:0,   reception:20 } },
   { id:"wolston-1",     name:"Wolston 1",      m2:37,  length:7.91, width:4.75, cap:{ boardroom:14, ushape:12, theatre:12, cabaret:20,  reception:30 } },
   { id:"wolston-2",     name:"Wolston 2",      m2:38,  length:5.75, width:5.0,  cap:{ boardroom:14, ushape:12, theatre:12, cabaret:20,  reception:30 } },
   { id:"wolston-3",     name:"Wolston 3",      m2:24,  length:5.3,  width:4.75, cap:{ boardroom:10, ushape:10, theatre:12, cabaret:10,  reception:24 } },
   { id:"wolston-suite", name:"Wolston Suite",  m2:88,  length:17.9, width:4.75, cap:{ boardroom:30, ushape:28, theatre:35, cabaret:50,  reception:80 } },
-  { id:"woodlands",     name:"Woodlands",      m2:279, length:null, width:null, cap:{ boardroom:112,ushape:90, theatre:120,cabaret:200, reception:280 } },
-  { id:"woodlands-1",   name:"Woodlands 1",    m2:140, length:null, width:null, cap:{ boardroom:50, ushape:40, theatre:55, cabaret:90,  reception:120 } },
-  { id:"woodlands-2",   name:"Woodlands 2",    m2:140, length:null, width:null, cap:{ boardroom:50, ushape:40, theatre:55, cabaret:90,  reception:120 } }
+  { id:"woodlands",     name:"Woodlands",      m2:279, length:19.0, width:13.05, cap:{ boardroom:112,ushape:90, theatre:120,cabaret:200, reception:280 } },
+  { id:"woodlands-1",   name:"Woodlands 1",    m2:140, length:9.5,  width:13.05, cap:{ boardroom:50, ushape:40, theatre:55, cabaret:90,  reception:120 } },
+  { id:"woodlands-2",   name:"Woodlands 2",    m2:140, length:19.5, width:13.05, cap:{ boardroom:50, ushape:40, theatre:55, cabaret:90,  reception:120 } }
 ];
 
 /* ---- ROOM HIRE (from Meeting Packages sheet, inc VAT) ---- */
@@ -199,21 +199,41 @@ function roomImage(room){
 }
 
 /* ---- TECH / CONNECTIVITY PER ROOM ----
-   DUMMY defaults — overwrite from M&E audit. Structure is final.
-   Each room inherits defaults unless overridden in ROOM_TECH[room.id]. */
+   REAL DATA from M&E audit (20 Mar 2026). Standard DDR/24hr inclusions
+   in every room: screen, HDMI cable, WiFi, pads & pens, flipchart.
+   `sellable` and `adminNote` are shown in Admin only. */
 const TECH_DEFAULT = {
-  screen:"Wall-mounted TV or drop-down projector screen",
-  hdmi:true, wirelessShare:true, videoCall:true, laptopConnect:true,
-  pa:false, microphones:false, wifi:true, flipchart:true,
-  hearingLoop:false, blackout:true, naturalLight:true, notes:""
+  screen:"Screen provided", hdmi:true, wirelessShare:false, videoCall:false,
+  laptopConnect:true, pa:false, microphones:false, wifi:true, flipchart:true,
+  hearingLoop:false, blackout:true, naturalLight:true, notes:"",
+  sellable:true, adminNote:""
 };
 const ROOM_TECH = {
-  // Examples of overrides — replace all from audit:
-  "woodlands":   { pa:true, microphones:true, notes:"Full PA, staging available, dancefloor" },
-  "woodlands-1": { pa:true, microphones:true },
-  "woodlands-2": { pa:true, microphones:true },
-  "brandon-suite":{ pa:true, microphones:true },
-  "wolston-suite":{ pa:true }
+  "brandon-1":{ screen:'98" 4K Smart TV on height-adjustable swivel stand', hdmi:true,
+    wirelessShare:true, videoCall:true, notes:'ClickShare, HDMI + USB-C. TV hidden as room doubles for social events.',
+    adminNote:'Sell breakout/refreshment area only via Brandon 1 (no separate access).' },
+  "brandon-2":{ screen:'98" 4K Smart TV on height-adjustable swivel stand', hdmi:true,
+    wirelessShare:true, videoCall:true, notes:'ClickShare, HDMI + USB-C. TV hidden as room doubles for social events.' },
+  "brandon-suite":{ screen:'98" 4K Smart TVs (combined)', hdmi:true, wirelessShare:true, videoCall:true, pa:true,
+    notes:'ClickShare, HDMI + USB-C across combined suite.' },
+  "wolston-suite":{ screen:'75" 4K Smart TV + additional screen on stand', hdmi:true, wirelessShare:true,
+    videoCall:true, pa:true, notes:'Long room — second screen so all guests see the presentation. ClickShare, HDMI + USB-C.',
+    adminNote:'Partition now removed (was temporary/not soundproof).' },
+  "beech":{ screen:'75" 4K Smart TV', hdmi:true, wirelessShare:true, videoCall:true,
+    notes:'ClickShare, HDMI + USB-C.', sellable:false,
+    adminNote:'NOT READY TO SELL: door needs fixing (attempted break-in, bottom panel broken), ladybird influx to clear, AV & door lock to fix.' },
+  "hunt":{ screen:'Wall TV (HDMI compatibility unconfirmed)', hdmi:true, wirelessShare:false, videoCall:false,
+    notes:'HDMI + USB-C, flipchart, branded pads & pens.', sellable:false,
+    adminNote:'NOT READY TO SELL: damp ceiling; room currently inaccessible.' },
+  "warwick":{ screen:'Wall TV (HDMI compatibility unconfirmed)', hdmi:true, wirelessShare:false, videoCall:false,
+    notes:'HDMI + USB-C, flipchart, branded pads & pens.', sellable:false,
+    adminNote:'NOT READY TO SELL: no corridor lighting; door key not working, room inaccessible.' },
+  "johnson":{ adminNote:'AV to be confirmed (audit pending).' },
+  "jones":{ adminNote:'AV to be confirmed (audit pending).' },
+  "parke":{ adminNote:'AV to be confirmed (audit pending).' },
+  "woodlands":{ pa:true, microphones:true, adminNote:'Theatre 28 / conference up to 220. AV to be confirmed.' },
+  "woodlands-1":{ pa:true, microphones:true },
+  "woodlands-2":{ pa:true, microphones:true }
 };
 function roomTech(room){ return Object.assign({}, TECH_DEFAULT, ROOM_TECH[room.id]||{}); }
 
@@ -251,57 +271,162 @@ const SUPPLIERS = [
     compliance:{ pli:null, pat:null }, verified:false, blurb:"Placeholder for floral arrangements and installations." }
 ];
 
-/* ---- EVENTS CONCIERGE — adaptive question flows ----
-   Modelled on real enquiries (arrangeMY BOT, Hitched, website leads).
-   Each step: key, question, type, and optional options/branch. */
-const BOT_INTRO = "Hello! I'm the Brandon Hall events assistant. I'll ask a few quick questions so our team can prepare exactly the right proposal for you. It only takes a minute.";
+/* ---- EVENTS CONCIERGE — Natalie Freeman, warm & personal ----
+   Modelled on real enquiries (arrangeMY BOT, Hitched, website leads). */
+const BOT_PERSON = { name:"Natalie Freeman", role:"Events Team, Brandon Hall Hotel & Spa",
+  avatar:"NF" };
+const BOT_GREETINGS = [
+  "Hi there! 👋 I'm Natalie from the events team here at Brandon Hall.",
+  "Lovely to have you — I'd love to help plan your event with us.",
+  "I'll just ask you a few quick things so I can put together exactly the right proposal for you. Shall we make a start?"
+];
 
 const BOT_COMMON_START = [
-  { key:"eventType", q:"What kind of event are you planning?", type:"choice",
+  { key:"eventType", q:"First things first — what kind of occasion are you planning?", type:"choice",
     options:[["wedding","💍 Wedding"],["meeting","📊 Meeting / Conference"],["birthday","🎂 Birthday / Celebration"],
       ["baby-shower","🍼 Baby Shower"],["funeral","🕊️ Celebration of Life"],["christmas","🎄 Christmas / NYE"],["other","Something else"]] }
 ];
 const BOT_FLOWS = {
   meeting: [
-    { key:"eventName", q:"What's the name of the meeting or event? (optional)", type:"text", optional:true },
-    { key:"date", q:"What date(s) are you looking at?", type:"text" },
-    { key:"days", q:"How many days?", type:"number" },
-    { key:"pax", q:"Roughly how many delegates?", type:"number" },
-    { key:"layout", q:"Preferred room layout?", type:"choice",
-      options:[["boardroom","Boardroom"],["ushape","U-shape / Horseshoe"],["theatre","Theatre"],["cabaret","Cabaret"],["unsure","Not sure yet"]] },
-    { key:"av", q:"What AV do you need? (e.g. screen share, video calls, projector, flipchart)", type:"text" },
-    { key:"catering", q:"Any catering needs? (arrival tea/coffee, lunch, dinner)", type:"text" },
-    { key:"accommodation", q:"Do you need overnight accommodation?", type:"choice", options:[["yes","Yes"],["no","No"]] },
-    { key:"budget", q:"Do you have a budget per delegate or day-delegate rate in mind? (optional)", type:"text", optional:true },
-    { key:"agent", q:"Are you booking on behalf of a company or as an agent? (optional)", type:"text", optional:true }
+    { key:"eventName", q:"Wonderful. Does the meeting have a name or reference? (totally fine to skip)", type:"text", optional:true },
+    { key:"date", q:"When are you looking to hold it? A date or rough timeframe is perfect.", type:"text" },
+    { key:"days", q:"And how many days will you need?", type:"number" },
+    { key:"pax", q:"Roughly how many delegates are you expecting?", type:"number" },
+    { key:"layout", q:"How would you like the room set up?", type:"choice",
+      options:[["boardroom","Boardroom"],["ushape","U-shape / Horseshoe"],["theatre","Theatre"],["cabaret","Cabaret"],["unsure","Not sure yet — happy for advice"]] },
+    { key:"av", q:"What AV will you need? Think screens, laptop connection, video calls (Teams/Zoom), flipcharts — just tell me in your own words.", type:"text" },
+    { key:"catering", q:"How about food and drink? Arrival tea/coffee, lunch, dinner…?", type:"text" },
+    { key:"accommodation", q:"Will any of your delegates need to stay overnight?", type:"choice", options:[["yes","Yes"],["no","No"],["maybe","Possibly"]] },
+    { key:"budget", q:"Do you have a day-delegate rate or budget in mind? No worries if not.", type:"text", optional:true },
+    { key:"agent", q:"Last one on the event itself — are you booking for a company or as an agency? (skip if it's just you)", type:"text", optional:true }
   ],
   wedding: [
-    { key:"date", q:"When are you hoping to celebrate? (a date or rough timeframe is fine)", type:"text" },
-    { key:"dateFlex", q:"Is that date fixed or flexible?", type:"choice", options:[["fixed","Fixed"],["flexible","Flexible"]] },
-    { key:"paxDay", q:"Roughly how many day guests?", type:"number" },
-    { key:"paxEve", q:"And how many evening guests? (optional)", type:"number", optional:true },
-    { key:"accommodation", q:"Will you need overnight accommodation for guests?", type:"choice", options:[["yes","Yes"],["no","No"],["maybe","Not sure"]] },
-    { key:"catering", q:"Any thoughts on catering or menu style yet? (optional)", type:"text", optional:true },
-    { key:"budget", q:"Do you have a budget in mind? (optional)", type:"text", optional:true },
-    { key:"extras", q:"Anything special on your wishlist? (drinks reception, entertainment, décor)", type:"text", optional:true }
+    { key:"date", q:"How exciting! 🥂 When are you hoping to celebrate? A date or a rough time of year is lovely.", type:"text" },
+    { key:"dateFlex", q:"And is that date set in stone, or have you got a bit of flexibility?", type:"choice", options:[["fixed","It's fixed"],["flexible","We're flexible"]] },
+    { key:"paxDay", q:"Roughly how many guests are you picturing for the day?", type:"number" },
+    { key:"paxEve", q:"And for the evening celebration? (skip if you're not sure yet)", type:"number", optional:true },
+    { key:"accommodation", q:"Will you and your guests want to stay with us overnight?", type:"choice", options:[["yes","Yes please"],["no","No"],["maybe","Not sure yet"]] },
+    { key:"catering", q:"Any early thoughts on the food — a sit-down meal, a buffet, something else? (no wrong answers!)", type:"text", optional:true },
+    { key:"budget", q:"Do you have a budget in mind for the day? It helps me tailor things — but do skip if you'd rather.", type:"text", optional:true },
+    { key:"extras", q:"Anything on your wishlist? Drinks reception, a band or DJ, styling and décor…", type:"text", optional:true }
   ],
-  social: [ // birthday, baby-shower, funeral, christmas, other
-    { key:"date", q:"What date are you considering?", type:"text" },
-    { key:"pax", q:"Roughly how many guests?", type:"number" },
-    { key:"style", q:"What are you picturing? (sit-down meal, buffet, drinks & canapés…)", type:"text" },
-    { key:"accommodation", q:"Do you need overnight rooms?", type:"choice", options:[["yes","Yes"],["no","No"],["maybe","Not sure"]] },
-    { key:"budget", q:"Any budget in mind? (optional)", type:"text", optional:true },
-    { key:"extras", q:"Any extras you'd like? (DJ, décor, entertainment)", type:"text", optional:true }
+  social: [
+    { key:"date", q:"Lovely! What date are you thinking of?", type:"text" },
+    { key:"pax", q:"Roughly how many guests will be joining you?", type:"number" },
+    { key:"style", q:"What sort of thing are you imagining? A sit-down meal, a buffet, drinks and canapés…?", type:"text" },
+    { key:"accommodation", q:"Will anyone need to stay overnight?", type:"choice", options:[["yes","Yes"],["no","No"],["maybe","Not sure"]] },
+    { key:"budget", q:"Any budget in mind? Happy to skip this one.", type:"text", optional:true },
+    { key:"extras", q:"Anything special you'd like — a DJ, décor, entertainment?", type:"text", optional:true }
   ]
 };
 const BOT_CONTACT = [
-  { key:"name", q:"Lovely — almost done. What's your name?", type:"text" },
-  { key:"email", q:"Best email to reach you?", type:"text" },
-  { key:"phone", q:"And a phone number?", type:"text" },
-  { key:"notes", q:"Anything else you'd like the team to know? (optional)", type:"text", optional:true }
+  { key:"name", q:"That's everything I need about the event — thank you! 😊 Could I take your name?", type:"text" },
+  { key:"email", q:"Lovely to meet you, {name}! What's the best email to reach you on?", type:"text" },
+  { key:"phone", q:"And a phone number, in case it's easier for me to call?", type:"text" },
+  { key:"notes", q:"Anything else you'd like me to know before I pass this to the team?", type:"text", optional:true }
 ];
 function botFlowFor(eventType){
   if(eventType==="meeting") return BOT_FLOWS.meeting;
   if(eventType==="wedding") return BOT_FLOWS.wedding;
   return BOT_FLOWS.social;
+}
+const BOT_SIGNOFF = "Perfect — I've got everything, {name}. I'm passing this straight to our events team and one of us will be in touch very soon with a tailored proposal. Thank you so much for thinking of Brandon Hall — we'd love to host you. 💙\n\n— Natalie";
+
+/* ---- COMPETITOR BENCHMARKING (from Nicola's comp-set sheet) ----
+   Brandon Hall's own rates shown alongside for comparison. */
+const COMPETITORS = [
+  { name:"Brandon Hall", us:true, ddr:"—", h24:"—", wedding:"£55pp (party)", xmas:"£24.95–£29.95", aftTea:"£22.50 / £30", babyShower:"£24.95–£29.95" },
+  { name:"Coombe Abbey", ddr:"£45+VAT", h24:"£165+VAT", wedding:"£115–£150pp", xmas:"£74.95", aftTea:"£37", babyShower:"£38–£41" },
+  { name:"Chesford Grange", ddr:"£30 inc", h24:"—", wedding:"£84–£99pp", xmas:"£27–£32", aftTea:"£30 / £35", babyShower:"£30–£42" },
+  { name:"Nailcote Hall", ddr:"£30 inc", h24:"£160", wedding:"£40–£90pp + hire", xmas:"£59pp", aftTea:"£28–£34", babyShower:"£28–£34" },
+  { name:"Windmill Village", ddr:"£48 inc", h24:"£170–£185", wedding:"from £6,495", xmas:"£70pp", aftTea:"£22.50 / £30", babyShower:"£43" },
+  { name:"Village Coventry", ddr:"£35 inc", h24:"on request", wedding:"£3,000–£10,000", xmas:"TBC", aftTea:"£21.50–£30", babyShower:"£21.50–£30" }
+];
+const COMPSET_NOTE = "Nicola's view: priced right for now given our offering; room to push rates later, but not yet.";
+
+/* ---- CHRISTMAS PACKAGES (amended Aug 2026) — dynamic per-head ---- */
+const XMAS_PACKAGES = [
+  { id:"joiner", name:"Joiner Party Night", pp:55, min:1, dates:"Fri 4th & 18th Dec",
+    lines:[["Room hire",3],["Arrival drink",0],["Novelties & décor",2],["3-course menu",28],["DJ",5],["Oompah Band (min 100)",17]] },
+  { id:"private", name:"Private Party Night", pp:45, min:30, dates:"Your date",
+    lines:[["Room hire",4],["Arrival drink",8],["3-course menu",28],["DJ",5],["½ bottle wine pp",0]] },
+  { id:"xmas-lunch", name:"Christmas Lunch (24 Dec)", pp:80, min:1, dates:"24 Dec",
+    lines:[["Festive afternoon tea",30],["Dinner",40],["Table décor/linen/crackers",7],["Jazz band (min 70)",20]] },
+  { id:"nye", name:"New Year's Eve Gala", pp:195, min:1, dates:"31 Dec",
+    lines:[["Bed & breakfast",40],["Prosecco & canapés",13],["4-course gala dinner",65],["Décor/linen/chair covers",16],
+      ["Novelties",5],["Staging",5],["Entertainment (DJ/Band)",35],["Midnight Prosecco",6],["Late licence",5],["NYD brunch",5]] }
+];
+
+/* ---- UPDATED DDR / ROOM-HIRE-ONLY (Rates sheet) ---- */
+const DDR_RATES = { day:35, dayLight:29, h24:124 };
+const ROOM_HIRE_ONLY = { // min–max £ per Rates sheet
+  "wolston-1":[100,300], "wolston-2":[100,300], "wolston-3":[200,300],
+  "beech":[200,400], "brandon-1":[350,1500], "brandon-2":[350,1500]
+};
+
+/* ---- EVENT PROFITABILITY MODEL (from their wedding costing tool) ----
+   Revenue − food/bev cost of sales − payroll − controllable − commission = profit.
+   Defaults mirror the spreadsheet; all editable in the tool. */
+const PROFIT_DEFAULTS = {
+  vat: 0.20,
+  foodCoS: 0.35,        // food cost of sales
+  bevCoS: 0.31,         // beverage cost of sales
+  bevSpendPP: 10,       // estimated beverage on-spend per cover (inc VAT)
+  // package element split (per cover, inc VAT) — editable
+  elements: { food:50, alcohol:23, soft:0, roomHire:5, dj:0, linen:1.5, toastmaster:0, eveBuffet:25, bedroom:2, av:0 },
+  // payroll roles: rate £/hr (inc NI & pension), default shifts & hours
+  payroll: [
+    { role:"Manager",    rate:21.8, staff:1, hours:8 },
+    { role:"Supervisor", rate:15,   staff:1, hours:8 },
+    { role:"Associate",  rate:13,   staff:2, hours:8 },
+    { role:"Chef",       rate:22,   staff:2, hours:8 },
+    { role:"Steward",    rate:13,   staff:1, hours:4 }
+  ],
+  controllable: { equipment:0, linen:120, security:0, other:0 },
+  commissionRate: 0
+};
+
+/* ---- PROFIT TOOL: EVENT-TYPE TEMPLATES ----
+   Load the right price + element split + payroll for each event type,
+   so the tool doesn't default to wedding assumptions every time. */
+const PROFIT_TEMPLATES = {
+  "wedding": { label:"Wedding (Extra Special)", price:106.50, bevSpend:10,
+    elements:{ food:50, alcohol:23, soft:0, roomHire:5, dj:0, linen:1.5, toastmaster:0, eveBuffet:25, bedroom:2, av:0 },
+    payroll:[{role:"Manager",rate:21.8,staff:1,hours:8},{role:"Supervisor",rate:15,staff:1,hours:8},
+      {role:"Associate",rate:13,staff:2,hours:8},{role:"Chef",rate:22,staff:2,hours:8},{role:"Steward",rate:13,staff:1,hours:4}],
+    controllable:{ equipment:0, linen:120, security:0, other:0 } },
+  "meeting": { label:"Day Delegate Meeting", price:35, bevSpend:0,
+    elements:{ food:18, alcohol:0, soft:0, roomHire:10, dj:0, linen:0, toastmaster:0, eveBuffet:0, bedroom:0, av:0 },
+    payroll:[{role:"Manager",rate:21.8,staff:1,hours:4},{role:"Associate",rate:13,staff:1,hours:8},
+      {role:"Chef",rate:22,staff:1,hours:6},{role:"Steward",rate:13,staff:1,hours:2}],
+    controllable:{ equipment:0, linen:0, security:0, other:0 } },
+  "24hr": { label:"24hr Delegate", price:124, bevSpend:5,
+    elements:{ food:34, alcohol:0, soft:0, roomHire:10, dj:0, linen:0, toastmaster:0, eveBuffet:0, bedroom:90, av:0 },
+    payroll:[{role:"Manager",rate:21.8,staff:1,hours:8},{role:"Associate",rate:13,staff:2,hours:8},
+      {role:"Chef",rate:22,staff:2,hours:8},{role:"Steward",rate:13,staff:1,hours:4}],
+    controllable:{ equipment:0, linen:0, security:0, other:0 } },
+  "christmas": { label:"Christmas Party", price:55, bevSpend:8,
+    elements:{ food:28, alcohol:0, soft:0, roomHire:4, dj:5, linen:1, toastmaster:0, eveBuffet:0, bedroom:0, av:0 },
+    payroll:[{role:"Manager",rate:21.8,staff:1,hours:6},{role:"Supervisor",rate:15,staff:1,hours:6},
+      {role:"Associate",rate:13,staff:2,hours:6},{role:"Chef",rate:22,staff:2,hours:6},{role:"Steward",rate:13,staff:1,hours:4}],
+    controllable:{ equipment:0, linen:0, security:0, other:0 } },
+  "celebration": { label:"Celebration / Party", price:53, bevSpend:8,
+    elements:{ food:35, alcohol:0, soft:0, roomHire:5, dj:0, linen:1, toastmaster:0, eveBuffet:0, bedroom:0, av:0 },
+    payroll:[{role:"Manager",rate:21.8,staff:1,hours:6},{role:"Associate",rate:13,staff:2,hours:6},
+      {role:"Chef",rate:22,staff:1,hours:6},{role:"Steward",rate:13,staff:1,hours:4}],
+    controllable:{ equipment:0, linen:0, security:0, other:0 } },
+  "funeral": { label:"Wake / Celebration of Life", price:30, bevSpend:5,
+    elements:{ food:20, alcohol:0, soft:0, roomHire:5, dj:0, linen:1, toastmaster:0, eveBuffet:0, bedroom:0, av:0 },
+    payroll:[{role:"Manager",rate:21.8,staff:1,hours:4},{role:"Associate",rate:13,staff:1,hours:4},
+      {role:"Chef",rate:22,staff:1,hours:4}],
+    controllable:{ equipment:0, linen:0, security:0, other:0 } }
+};
+/* map enquiry event ids to a template */
+function templateForEvent(evId){
+  if(evId==="meeting") return "meeting";
+  if(evId==="wedding") return "wedding";
+  if(evId==="christmas") return "christmas";
+  if(evId==="funeral") return "funeral";
+  if(["birthday","baby-shower","celebration"].includes(evId)) return "celebration";
+  return "wedding";
 }

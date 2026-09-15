@@ -17,8 +17,36 @@ Navy-led to match the live hotel website (`#1a2b47`), with the gold `#BB9979` ma
 ## Images
 Room and gallery photos are linked live from the hotel website, so they load in any normal browser and stay current. To store them locally instead, download them and change the paths in `data.js` (`GALLERY` / `IMG`).
 
-## Events concierge — upgrading to real AI
-The chat currently runs as a **guided branching conversation** (no API key, no cost). To upgrade to the full Claude-powered assistant later: build a Firebase Cloud Function that holds your Anthropic API key server-side and calls the Claude API, then point the chat's answer handler at that function instead of the scripted flow. The captured-enquiry structure stays the same.
+## Firebase — LIVE setup (shared pipeline across the team)
+
+The portal is wired to Firebase project **brandonhall-7bdef**. When these steps are done, all four users share one live enquiry pipeline that syncs across devices. Until then, it runs in **Demo mode** (browser-only) automatically — the badge by your name shows which.
+
+**In the Firebase console (console.firebase.google.com → brandonhall-7bdef):**
+
+1. **Authentication → Sign-in method:** enable **Email/Password**. Also enable **Anonymous** (lets the public events-chat submit enquiries).
+
+2. **Authentication → Users → Add user** — create the four accounts:
+   | Email | Password |
+   |---|---|
+   | ajay.kawa@brandonhall.portal | BHAK01 |
+   | raj.kumar@brandonhall.portal | BHRK01 |
+   | alia.taub@brandonhall.portal | BHAT01 |
+   | nicola.cartwright@brandonhall.portal | BHNC01 |
+   (The team still logs in with just their name + short code e.g. `BHAK` — the app maps it to the padded password.)
+
+3. **Firestore Database → Create database** (production mode, London/europe-west2).
+
+4. **Firestore → Rules:** paste the contents of `firestore.rules` (in this folder) and **Publish**.
+
+5. **Authorized domains:** Authentication → Settings → Authorized domains → add your GitHub Pages domain (e.g. `yourname.github.io`) so login works on the live site.
+
+That's it. Reload the portal on GitHub Pages — the badge should read **Live**, and the four seed enquiries appear once (seeded automatically on first run).
+
+### Login (unchanged for the team)
+Pick your name, type `BH` + your initials (e.g. `BHAK`). Works the same in Demo or Live.
+
+### How data flows
+Enquiries, stage changes and saved costings write to Firestore and sync live to everyone. The events-chat (public link) signs in anonymously and drops leads into the same shared pipeline. Saved profit *scenarios* stay per-browser (they're a scratchpad, not shared data).
 
 ## Logins (demo mode)
 | Name | Code |

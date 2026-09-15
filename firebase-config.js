@@ -1,27 +1,22 @@
 /* ============================================================
-   FIREBASE CONFIG
-   1. Create a Firebase project at console.firebase.google.com
-   2. Enable Authentication (Email/Password) and Firestore
-   3. Paste your config below (Project settings > Your apps > Web)
-   4. Run seed-users.js instructions in README to create the 4 logins
+   FIREBASE CONFIG — Brandon Hall Portal
+   Live project: brandonhall-7bdef
    ============================================================ */
-
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyDnPWrPGInDRTCF1Go710XC_8_77l_72i0",
+  authDomain: "brandonhall-7bdef.firebaseapp.com",
+  projectId: "brandonhall-7bdef",
+  storageBucket: "brandonhall-7bdef.firebasestorage.app",
+  messagingSenderId: "391317900568",
+  appId: "1:391317900568:web:643c9d6691f7f16d65226d"
 };
 
-/* The four initial users to create in Firebase Auth (Email/Password):
-   ajay.kawa@brandonhall.portal          →  BHAK...  (min 6 chars, e.g. BHAK01)
-   raj.kumar@brandonhall.portal          →  BHRK...
-   alia.taub@brandonhall.portal          →  BHAT...
-   nicola.cartwright@brandonhall.portal  →  BHNC...
-
-   NOTE: Firebase requires passwords of at least 6 characters, so the
-   4-char codes (BHAK etc.) are padded — see README for the exact
-   passwords, or use the login-code mapping in index.html which lets
-   staff type just "BHAK" and maps it to the real Firebase password. */
+/* Login mapping — the four accounts.
+   Team types their name + short code (BHAK); we map to the
+   Firebase email + padded password behind the scenes. */
+const FB_LOGINS = {
+  "ajay.kawa":         { email:"ajay.kawa@brandonhall.portal",         pw:"BHAK01", code:"BHAK", name:"Ajay Kawa" },
+  "raj.kumar":         { email:"raj.kumar@brandonhall.portal",         pw:"BHRK01", code:"BHRK", name:"Raj Kumar" },
+  "alia.taub":         { email:"alia.taub@brandonhall.portal",         pw:"BHAT01", code:"BHAT", name:"Alia Taub" },
+  "nicola.cartwright": { email:"nicola.cartwright@brandonhall.portal", pw:"BHNC01", code:"BHNC", name:"Nicola Cartwright" }
+};

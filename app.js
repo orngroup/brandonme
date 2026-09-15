@@ -28,42 +28,110 @@ const Store = {
   add(e){ const l=this.all(); e.id="ENQ-"+Date.now().toString(36).toUpperCase();
     e.created=new Date().toISOString(); e.status=e.status||"new"; l.unshift(e); this.save(l); return e; },
   update(id,patch){ const l=this.all(); const i=l.findIndex(x=>x.id===id);
-    if(i>-1){ Object.assign(l[i],patch); this.save(l);} }
+    if(i>-1){ Object.assign(l[i],patch); this.save(l);} },
+  seed(){ if(localStorage.getItem("bh_seeded"))return;
+    const samples=[
+      { name:"Dairy Carbon Network", company:"via arrangeMY", email:"maria.hamblin@arrangemy.com", phone:"01905 610016",
+        event:"meeting", date:"18 Nov 2026", pax:7, room:"", source:"agent (arrangeMY)", status:"new",
+        budget:"£40–45 DDR", accommodation:"yes",
+        notes:"2-day team meeting · Layout: Horseshoe · AV: TV/projector, laptop share, Teams call, flipchart, water · Dinner 7 delegates · DBB overnight · 12% commission" },
+      { name:"Andre Brissett", email:"brissett44@outlook.com", phone:"+447355574227",
+        event:"wedding", date:"23 Nov 2026", pax:75, room:"", source:"Hitched", status:"new",
+        notes:"Country wedding, West Midlands · 60–90 guests · Requested packages info" },
+      { name:"Dominic Hillyard", email:"dominic_hillyard@outlook.com", phone:"07534325007",
+        event:"wedding", date:"Aug 2027", pax:55, room:"brandon-suite", source:"website", status:"contacted",
+        accommodation:"yes", notes:"All-in-one ceremony + reception + party · ~50 day & evening · ~10 rooms · Proposal sent, viewing offered" },
+      { name:"Rebekah Stretton", email:"rebekah.stretton@gmail.com", phone:"07505174898",
+        event:"wedding", date:"29 Mar 2026", pax:50, room:"", source:"website", status:"new",
+        accommodation:"yes" },
+      { name:"Samantha Courtnell", email:"samcourtnell@outlook.com", phone:"07870672918",
+        event:"wedding", date:"2027 (TBC)", pax:90, room:"", source:"website", status:"new",
+        accommodation:"yes", notes:"Wants spaces, prices, sample menus" }
+    ];
+    const l=this.all(); samples.forEach(s=>{ s.id="ENQ-"+Math.random().toString(36).slice(2,8).toUpperCase();
+      s.created=new Date(Date.now()-Math.random()*20*864e5).toISOString(); l.push(s); });
+    this.save(l); localStorage.setItem("bh_seeded","1");
+  }
 };
 
 let SESSION=null, CURRENT_TAB="rooms";
 
 /* ============================================================ AUTH */
-$("#lg-btn").onclick = ()=>{
+$("#lg-btn").onclick = async ()=>{
   const u=$("#lg-user").value, pw=$("#lg-pw").value.trim().toUpperCase();
   const err=$("#lg-err"); err.textContent="";
   if(!u){ err.textContent="Please select your name."; return; }
   const user=USERS[u];
-  if(!user || pw!==user.code){ err.textContent="Incorrect access code."; return; }
-  SESSION=user;
+  if(!user){ err.textContent="Unknown user."; return; }
+
+  const btn=$("#lg-btn"); btn.disabled=true; const label=btn.textContent; btn.textContent="Signing in…";
+  // Try Firebase first; fall back to demo (local) auth
+  if(FB.ready){
+    const r=await fbSignIn(u, pw);
+    if(r.ok){ SESSION=user; enterApp(user); btn.disabled=false; btn.textContent=label; return; }
+    if(!r.demo){ err.textContent=r.error||"Sign-in failed."; btn.disabled=false; btn.textContent=label; return; }
+  }
+  // demo fallback
+  if(pw!==user.code){ err.textContent="Incorrect access code."; btn.disabled=false; btn.textContent=label; return; }
+  SESSION=user; enterApp(user); btn.disabled=false; btn.textContent=label;
+};
+function enterApp(user){
   $("#login").classList.add("hidden");
   $("#app").classList.remove("hidden");
   $("#tb-who").textContent=user.name;
+  const badge=$("#tb-mode"); if(badge) badge.textContent = FB.ready? "Live" : "Demo";
   boot();
-};
+}
 $("#lg-pw").addEventListener("keydown",e=>{ if(e.key==="Enter")$("#lg-btn").click(); });
-$("#tb-logout").onclick=()=>{ SESSION=null; $("#app").classList.add("hidden");
+$("#tb-logout").onclick=async ()=>{ await fbSignOut(); SESSION=null; $("#app").classList.add("hidden");
   $("#login").classList.remove("hidden"); $("#lg-pw").value=""; };
 
 /* ============================================================ ROUTING */
-function boot(){
+/* DB facade: Firebase when live, localStorage in demo mode */
+const DB = {
+  live(){ return FB.ready && FB.user; },
+  all(){ return this.live()? FBStore.all() : Store.all(); },
+  async add(e){ return this.live()? FBStore.add(e) : Store.add(e); },
+  async update(id,patch){ return this.live()? FBStore.update(id,patch) : Store.update(id,patch); }
+};
+
+const SEED_SAMPLES=[
+  { name:"Dairy Carbon Network", company:"via arrangeMY", email:"maria.hamblin@arrangemy.com", phone:"01905 610016",
+    event:"meeting", date:"18 Nov 2026", pax:7, room:"", source:"agent (arrangeMY)", status:"new",
+    budget:"£40–45 DDR", accommodation:"yes",
+    notes:"2-day team meeting · Layout: Horseshoe · AV: TV/projector, laptop share, Teams call, flipchart, water · Dinner 7 delegates · DBB overnight · 12% commission" },
+  { name:"Andre Brissett", email:"brissett44@outlook.com", phone:"+447355574227",
+    event:"wedding", date:"23 Nov 2026", pax:75, room:"", source:"Hitched", status:"new",
+    notes:"Country wedding, West Midlands · 60–90 guests · Requested packages info" },
+  { name:"Dominic Hillyard", email:"dominic_hillyard@outlook.com", phone:"07534325007",
+    event:"wedding", date:"Aug 2027", pax:55, room:"brandon-suite", source:"website", status:"contacted",
+    accommodation:"yes", notes:"All-in-one ceremony + reception + party · ~50 day & evening · ~10 rooms · Proposal sent, viewing offered" },
+  { name:"Rebekah Stretton", email:"rebekah.stretton@gmail.com", phone:"07505174898",
+    event:"wedding", date:"29 Mar 2026", pax:50, room:"", source:"website", status:"new", accommodation:"yes" },
+  { name:"Samantha Courtnell", email:"samcourtnell@outlook.com", phone:"07870672918",
+    event:"wedding", date:"2027 (TBC)", pax:90, room:"", source:"website", status:"new",
+    accommodation:"yes", notes:"Wants spaces, prices, sample menus" }
+];
+
+async function boot(){
+  if(DB.live()){
+    FBStore.start();                       // begin live Firestore sync
+    await FBStore.seedOnce(SEED_SAMPLES);   // seed only if empty
+    FBStore.onChange(()=>{ if(CURRENT_TAB==="enquiries") render(); }); // live refresh
+  } else {
+    Store.seed();
+  }
   document.querySelectorAll("#tabs button").forEach(b=>{
     b.onclick=()=>{ CURRENT_TAB=b.dataset.tab;
       document.querySelectorAll("#tabs button").forEach(x=>x.classList.toggle("active",x===b));
       render(); };
   });
-  // hide admin tab for non-admins (all 4 are admin for now)
   render();
 }
 function render(){
   const v=$("#view"); v.innerHTML="";
   ({rooms:renderRooms, packages:renderPackages, suppliers:renderSuppliers, quote:renderQuote,
-    enquiries:renderEnquiries, chat:renderChat, admin:renderAdmin }[CURRENT_TAB]||renderRooms)(v);
+    profit:renderProfit, enquiries:renderEnquiries, chat:renderChat, admin:renderAdmin }[CURRENT_TAB]||renderRooms)(v);
 }
 
 /* ============================================================ ROOMS */
@@ -169,7 +237,7 @@ function openRoom(r){
     <div class="sec-title">Capacity by layout</div>
     <table class="cap-table">${caps}</table>
 
-    <div class="sec-title">Tech &amp; connectivity <span class="dummy-tag">DUMMY — awaiting M&E audit</span></div>
+    <div class="sec-title">Tech &amp; connectivity</div>
     <div class="tech-grid">${techItems}</div>
     ${tech.notes?`<p style="font-size:13px;color:var(--muted);margin-top:8px">${tech.notes}</p>`:""}
 
@@ -227,30 +295,67 @@ function renderPackages(v){
         <td style="text-align:right">${money(i.price)}</td><td>${i.unit}</td></tr>`).join("");
     v.appendChild(t);
   });
+
+  // ---- Christmas dynamic pricing ----
+  v.appendChild(el("div","sec-title","Christmas & New Year — live pricing"));
+  const xmasWrap=el("div","xmas-tool");
+  xmasWrap.innerHTML=`
+    <div class="xmas-controls">
+      <div><label>Package</label><select id="xmas-pkg">${XMAS_PACKAGES.map(p=>`<option value="${p.id}">${p.name} (${p.dates})</option>`).join("")}</select></div>
+      <div><label>Guests</label><input id="xmas-pax" type="number" min="1" value="80"></div>
+    </div>
+    <div id="xmas-out"></div>`;
+  v.appendChild(xmasWrap);
+  const calcXmas=()=>{
+    const p=XMAS_PACKAGES.find(x=>x.id===$("#xmas-pkg").value);
+    const pax=parseInt($("#xmas-pax").value)||0;
+    const rows=p.lines.map(([label,cost])=>`<tr><td>${label}</td><td style="text-align:right">${cost?money(cost):"incl."}</td></tr>`).join("");
+    const total=p.pp*pax;
+    $("#xmas-out").innerHTML=`
+      <table class="data-table" style="margin-top:12px">
+        <tr><th>Included</th><th style="text-align:right">Per head</th></tr>${rows}
+        <tr style="background:#eef2f8;font-weight:700"><td>Per person</td><td style="text-align:right">${money(p.pp)}</td></tr>
+      </table>
+      <div class="xmas-total">Total for <b>${pax}</b> guests: <span>${money(total)}</span>
+        ${p.min>1?`<span class="xmas-min">Min ${p.min} guests</span>`:""}</div>`;
+  };
+  $("#xmas-pkg").onchange=calcXmas; $("#xmas-pax").oninput=calcXmas; calcXmas();
 }
 
 /* ============================================================ QUOTE BUILDER */
 let prefill=null;
+let QUOTE_ROOMS=[]; // array of room-booking line items
+function newRoomLine(pre){
+  return { room: pre?.room || ROOMS[0].id, date: pre?.date||"", layout: pre?.layout||"theatre",
+    pax: pre?.pax || 40, hire:"full", pkg:"" };
+}
 function renderQuote(v){
-  v.appendChild(head("Create a Quote","Build a costed quote and download a branded PDF to email the customer."));
-  const wrap=el("div","quote-layout");
+  v.appendChild(head("Create a Quote","Build a multi-room quote — add a line for each room or space, with its own day, layout and package. Download a branded brochure or simple quote."));
+  if(!QUOTE_ROOMS.length) QUOTE_ROOMS=[newRoomLine(prefill)];
+  if(prefill){ QUOTE_ROOMS=[newRoomLine(prefill)]; }
+  const preEvent = prefill?.event || "wedding";
+  prefill=null;
 
+  const wrap=el("div","quote-layout");
   // left: form
   const left=el("div","quote-panel");
-  left.innerHTML=`<h3>Event details</h3>
+  left.innerHTML=`<h3>Customer</h3>
     <div class="form-grid">
       <div><label>Customer name</label><input id="q-name" placeholder="Full name"></div>
       <div><label>Company (optional)</label><input id="q-co" placeholder="Company"></div>
       <div><label>Email</label><input id="q-email" type="email" placeholder="name@email.com"></div>
       <div><label>Phone</label><input id="q-phone" placeholder="Phone"></div>
-      <div><label>Event type</label><select id="q-event">${EVENT_TYPES.map(e=>`<option value="${e.id}">${e.label}</option>`).join("")}</select></div>
-      <div><label>Event date</label><input id="q-date" type="date"></div>
-      <div><label>Room</label><select id="q-room">${ROOMS.map(r=>`<option value="${r.id}">${r.name} (${r.m2}m²)</option>`).join("")}</select></div>
-      <div><label>Guests</label><input id="q-pax" type="number" min="1" value="40"></div>
-      <div><label>Package</label><select id="q-pkg"><option value="">Room hire only</option>${PACKAGES.map(p=>`<option value="${p.id}">${p.name} (from ${money(p.from)}pp)</option>`).join("")}</select></div>
-      <div><label>Hire basis</label><select id="q-hire"><option value="full">Full day</option><option value="half">Half day</option><option value="none">None (package incl.)</option></select></div>
+      <div><label>Event type</label><select id="q-event">${EVENT_TYPES.map(e=>`<option value="${e.id}" ${e.id===preEvent?"selected":""}>${e.label}</option>`).join("")}</select></div>
+      <div><label>Main event date</label><input id="q-date" type="date"></div>
     </div>
-    <h3 style="margin-top:22px">Add-ons</h3>
+
+    <div class="rooms-head">
+      <h3 style="margin-top:22px">Rooms &amp; spaces</h3>
+      <button class="btn sm" id="q-addroom">+ Add room</button>
+    </div>
+    <div id="q-roomlines"></div>
+
+    <h3 style="margin-top:22px">Add-ons <span class="qs-sub">(applied across the whole quote)</span></h3>
     <div id="q-addons"></div>`;
   wrap.appendChild(left);
 
@@ -262,6 +367,8 @@ function renderQuote(v){
     <button class="btn ghost block" id="q-save" style="margin-top:8px">Save as enquiry</button>`;
   wrap.appendChild(right);
   v.appendChild(wrap);
+
+  renderRoomLines();
 
   // add-ons list
   const ad=$("#q-addons");
@@ -277,36 +384,70 @@ function renderQuote(v){
     });
   });
 
-  ["q-event","q-room","q-pax","q-pkg","q-hire"].forEach(id=>$("#"+id).addEventListener("change",recalcQuote));
-  $("#q-pax").addEventListener("input",recalcQuote);
-  if(prefill){ $("#q-room").value=prefill.room; $("#q-event").value=prefill.event; $("#q-pax").value=prefill.pax; prefill=null; }
+  $("#q-addroom").onclick=()=>{ QUOTE_ROOMS.push(newRoomLine()); renderRoomLines(); recalcQuote(); };
+  $("#q-event").addEventListener("change",recalcQuote);
   recalcQuote();
   $("#q-pdf").onclick=downloadQuotePDF;
   $("#q-brochure").onclick=downloadBrochurePDF;
   $("#q-save").onclick=saveQuoteAsEnquiry;
 }
 
+function renderRoomLines(){
+  const box=$("#q-roomlines"); if(!box)return;
+  box.innerHTML="";
+  QUOTE_ROOMS.forEach((line,i)=>{
+    const card=el("div","room-line");
+    card.innerHTML=`
+      <div class="rl-head"><span class="rl-num">Room ${i+1}</span>
+        ${QUOTE_ROOMS.length>1?`<button class="rl-del" data-i="${i}" title="Remove">×</button>`:""}</div>
+      <div class="rl-grid">
+        <div><label>Room / space</label><select data-i="${i}" data-f="room">${ROOMS.map(r=>`<option value="${r.id}" ${r.id===line.room?"selected":""}>${r.name} (${r.m2}m²)</option>`).join("")}</select></div>
+        <div><label>Date / day</label><input type="date" data-i="${i}" data-f="date" value="${line.date}"></div>
+        <div><label>Layout</label><select data-i="${i}" data-f="layout">${Object.entries(LAYOUT_LABELS).map(([k,l])=>`<option value="${k}" ${k===line.layout?"selected":""}>${l}</option>`).join("")}</select></div>
+        <div><label>Guests</label><input type="number" min="1" data-i="${i}" data-f="pax" value="${line.pax}"></div>
+        <div><label>Hire basis</label><select data-i="${i}" data-f="hire"><option value="full" ${line.hire==="full"?"selected":""}>Full day</option><option value="half" ${line.hire==="half"?"selected":""}>Half day</option><option value="none" ${line.hire==="none"?"selected":""}>None (incl.)</option></select></div>
+        <div><label>Package</label><select data-i="${i}" data-f="pkg"><option value="">Room hire only</option>${PACKAGES.map(p=>`<option value="${p.id}" ${p.id===line.pkg?"selected":""}>${p.name} (${money(p.from)}pp)</option>`).join("")}</select></div>
+      </div>`;
+    box.appendChild(card);
+  });
+  box.querySelectorAll("[data-f]").forEach(inp=>inp.addEventListener("input",e=>{
+    const i=+e.target.dataset.i, f=e.target.dataset.f;
+    QUOTE_ROOMS[i][f] = (f==="pax")? (parseInt(e.target.value)||0) : e.target.value;
+    recalcQuote();
+  }));
+  box.querySelectorAll(".rl-del").forEach(b=>b.onclick=()=>{
+    QUOTE_ROOMS.splice(+b.dataset.i,1); renderRoomLines(); recalcQuote();
+  });
+}
+
 function gatherQuote(){
-  const room=ROOMS.find(r=>r.id===$("#q-room").value);
-  const evId=$("#q-event").value, pax=parseInt($("#q-pax").value)||0;
-  const pkg=PACKAGES.find(p=>p.id===$("#q-pkg").value);
-  const hireBasis=$("#q-hire").value;
+  const evId=$("#q-event").value;
   const lines=[];
-  if(pkg){ lines.push({label:`${pkg.name} × ${pax} guests`, amt:pkg.from*pax, sub:`${money(pkg.from)}pp`}); }
-  if(hireBasis!=="none" && ROOM_HIRE[room.id]){
-    const h=ROOM_HIRE[room.id][hireBasis];
-    lines.push({label:`Room hire — ${room.name} (${hireBasis} day)`, amt:h});
-  }
+  let totalPax=0;
+  QUOTE_ROOMS.forEach(line=>{
+    const room=ROOMS.find(r=>r.id===line.room); if(!room)return;
+    const pax=parseInt(line.pax)||0; totalPax+=pax;
+    const dateStr=line.date? " ("+new Date(line.date).toLocaleDateString("en-GB")+")" : "";
+    const pkg=PACKAGES.find(p=>p.id===line.pkg);
+    if(pkg){ lines.push({label:`${pkg.name} — ${room.name}${dateStr} × ${pax}`, amt:pkg.from*pax, sub:`${money(pkg.from)}pp`}); }
+    if(line.hire!=="none" && ROOM_HIRE[room.id]){
+      lines.push({label:`Room hire — ${room.name} (${line.hire} day)${dateStr}`, amt:ROOM_HIRE[room.id][line.hire]});
+    }
+  });
   document.querySelectorAll("#q-addons input").forEach(q=>{
     const n=parseInt(q.value)||0; if(n>0){
       const price=parseFloat(q.dataset.price);
-      const mult = q.dataset.unit==="pp" ? n : n; // qty entered directly
       lines.push({label:`${q.dataset.name} × ${n} ${q.dataset.unit}`, amt:price*n});
     }
   });
   const subtotal=lines.reduce((s,l)=>s+l.amt,0);
-  const carbon=carbonModel(room,evId,pax);
-  return {room,evId,pax,pkg,lines,subtotal,carbon,
+  // carbon: sum across room lines
+  let carbonTotal=0;
+  QUOTE_ROOMS.forEach(line=>{ const room=ROOMS.find(r=>r.id===line.room);
+    if(room) carbonTotal += carbonModel(room,evId,parseInt(line.pax)||0).total; });
+  const primaryRoom=ROOMS.find(r=>r.id===QUOTE_ROOMS[0]?.room)||ROOMS[0];
+  return { rooms:QUOTE_ROOMS, room:primaryRoom, evId, pax:totalPax, lines, subtotal,
+    carbon:{ total:carbonTotal },
     customer:{ name:$("#q-name")?.value||"", co:$("#q-co")?.value||"",
       email:$("#q-email")?.value||"", phone:$("#q-phone")?.value||"",
       date:$("#q-date")?.value||"" }};
@@ -316,9 +457,9 @@ function recalcQuote(){
   s.innerHTML = q.lines.length
     ? q.lines.map(l=>`<div class="qs-line"><span>${l.label}${l.sub?` <span class="qs-sub">${l.sub}</span>`:""}</span><span>${money(l.amt)}</span></div>`).join("")
       +`<div class="qs-line total"><span>Total</span><span>${money(q.subtotal)}</span></div>
-        <div class="qs-sub">Prices include VAT where applicable.</div>
-        <div class="carbon-quote">Estimated carbon: <b>${q.carbon.total} kg CO₂e</b> for this event</div>`
-    : `<div class="qs-sub">Add a package, room hire or add-ons to build the quote.</div>`;
+        <div class="qs-sub">${QUOTE_ROOMS.length} room${QUOTE_ROOMS.length>1?"s":""} · ${q.pax} total guests · inc VAT where applicable.</div>
+        <div class="carbon-quote">Estimated carbon: <b>${q.carbon.total} kg CO₂e</b> across all spaces</div>`
+    : `<div class="qs-sub">Add a room, package or add-ons to build the quote.</div>`;
 }
 
 /* ============================================================ QUOTE PDF (print-to-PDF) */
@@ -373,13 +514,25 @@ function downloadBrochurePDF(){
   const q=gatherQuote();
   if(!q.customer.name){ alert("Please enter the customer name first."); return; }
   const et=EVENT_TYPES.find(e=>e.id===q.evId);
-  const lay=bestLayout(q.room,q.evId);
   const ref="BH-P-"+Date.now().toString(36).toUpperCase();
   const rows=q.lines.map(l=>`<tr><td>${l.label}</td><td style="text-align:right">${money(l.amt)}</td></tr>`).join("");
-  const pkg=q.pkg;
-  const svg=seatingSVG(q.room,lay,q.pax).replace(/background:#fbfaf7/,'background:#fff');
   const hero=roomImage(q.room);
   const gallery=GALLERY.weddings.slice(0,3).map(u=>`<img src="${u}" style="width:32%;height:90px;object-fit:cover;border-radius:6px">`).join("");
+
+  // per-room booking blocks with seating diagrams
+  const roomBlocks=q.rooms.map((line,idx)=>{
+    const room=ROOMS.find(r=>r.id===line.room); if(!room)return"";
+    const pax=parseInt(line.pax)||0;
+    const dateStr=line.date? new Date(line.date).toLocaleDateString("en-GB") : "Date TBC";
+    const pkg=PACKAGES.find(p=>p.id===line.pkg);
+    const svg=seatingSVG(room,line.layout,pax).replace(/background:#fbfaf7/,'background:#fff');
+    return `<div class="room-block">
+      <h3 class="rb-title">${room.name} <span>· ${dateStr} · ${LAYOUT_LABELS[line.layout]} · ${pax} guests</span></h3>
+      ${pkg?`<div class="rb-pkg">${pkg.name}</div>`:""}
+      <div style="max-width:440px;margin:8px auto 0">${svg}</div>
+    </div>`;
+  }).join("");
+
   const win=window.open("","_blank");
   win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${ref}</title>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -412,6 +565,10 @@ function downloadBrochurePDF(){
       .stats div{flex:1;background:#f7f8fa;border-radius:8px;padding:12px;text-align:center}
       .stats b{display:block;font-family:'Cormorant Garamond',serif;font-size:22px;color:#1a2b47}
       .stats span{font-size:11px;color:#7a8494}
+      .room-block{margin:18px 0;padding-bottom:16px;border-bottom:1px solid #e3e7ee}
+      .rb-title{font-family:'Cormorant Garamond',serif;font-size:20px;color:#1a2b47;margin:0}
+      .rb-title span{font-size:13px;color:#7a8494;font-family:'Inter',sans-serif}
+      .rb-pkg{display:inline-block;background:#eef2f8;color:#1a2b47;font-size:12px;font-weight:600;padding:3px 10px;border-radius:6px;margin-top:6px}
       .foot-note{margin-top:24px;font-size:10px;color:#7a8494;border-top:1px solid #e3e7ee;padding-top:12px}
     </style></head><body>
     <!-- COVER -->
@@ -425,29 +582,25 @@ function downloadBrochurePDF(){
       <div class="foot">Ref ${ref} · ${new Date().toLocaleDateString("en-GB")} · Main Street, Brandon, Coventry CV8 3FW · +44 (0)247 710 2555</div>
     </div>
 
-    <!-- VENUE + ROOM -->
+    <!-- VENUE + ROOMS -->
     <div class="page">
       <h2>Your event at Brandon Hall</h2><div class="rule"></div>
-      <p class="lead">Set within 17 acres of Warwickshire grounds, Brandon Hall offers elegant spaces for every occasion. Here's our proposal for your ${et.label.toLowerCase()}.</p>
+      <p class="lead">Set within 17 acres of Warwickshire grounds, Brandon Hall offers elegant spaces for every occasion. Here's our proposal for your ${et.label.toLowerCase()}${q.rooms.length>1?` across ${q.rooms.length} rooms`:""}.</p>
       <div class="grid2">${gallery}</div>
       <div class="stats">
-        <div><b>${q.room.name}</b><span>Your room</span></div>
-        <div><b>${q.room.m2} m²</b><span>Floor area</span></div>
-        <div><b>${q.pax}</b><span>Guests</span></div>
-        <div><b>${LAYOUT_LABELS[lay]}</b><span>Layout</span></div>
+        <div><b>${q.rooms.length}</b><span>${q.rooms.length>1?"Rooms":"Room"}</span></div>
+        <div><b>${q.pax}</b><span>Total guests</span></div>
+        <div><b>${q.carbon.total}</b><span>kg CO₂e</span></div>
       </div>
-      <h2 style="font-size:20px;margin-top:20px">Your room, laid out for ${q.pax} guests</h2><div class="rule"></div>
-      <div style="max-width:480px;margin:0 auto">${svg}</div>
+      <h2 style="font-size:20px;margin-top:20px">Your spaces</h2><div class="rule"></div>
+      ${roomBlocks}
     </div>
 
-    <!-- PACKAGE + COSTS -->
+    <!-- COSTS -->
     <div class="page">
       <h2>Your proposal</h2><div class="rule"></div>
-      ${pkg?`<div class="box"><b style="font-family:'Cormorant Garamond',serif;font-size:18px">${pkg.name}</b>
-        <div class="inc">${pkg.includes.map(i=>`<div>${i}</div>`).join("")}</div></div>`:""}
-      <h2 style="font-size:18px;margin-top:18px">Costs</h2><div class="rule"></div>
       <table>${rows}<tr class="total"><td>Total (inc. VAT where applicable)</td><td style="text-align:right">${money(q.subtotal)}</td></tr></table>
-      <div class="carbon">🌱 Estimated event carbon footprint: <b>${q.carbon.total} kg CO₂e</b> — we're committed to sustainable events.</div>
+      <div class="carbon">🌱 Estimated event carbon footprint: <b>${q.carbon.total} kg CO₂e</b> across all spaces — we're committed to sustainable events.</div>
       <div class="foot-note">This proposal is valid for 14 days and subject to availability. Prices include VAT at the current rate unless otherwise stated. Rates are non-commissionable. Cancellation terms are per individual contract. Bio-degradable confetti outside only; LED candelabras only (no naked flames).<br><br>
       To confirm, contact our events team: nicola.cartwright@brandonhallhotelandspa.com · +44 (0)247 710 2555</div>
     </div>
@@ -459,29 +612,58 @@ function downloadBrochurePDF(){
 function saveQuoteAsEnquiry(){
   const q=gatherQuote();
   if(!q.customer.name){ alert("Please enter the customer name first."); return; }
-  Store.add({ name:q.customer.name, email:q.customer.email, phone:q.customer.phone,
-    company:q.customer.co, event:q.evId, room:q.room.id, pax:q.pax, date:q.customer.date,
-    value:q.subtotal, status:"quoted", source:"quote builder", notes:`Quote built: ${money(q.subtotal)}` });
+  const roomNote = q.rooms.length>1 ? ` · ${q.rooms.length} rooms` : "";
+  DB.add({ name:q.customer.name, email:q.customer.email, phone:q.customer.phone,
+    company:q.customer.co, event:q.evId, room:q.rooms[0]?.room||"", pax:q.pax, date:q.customer.date,
+    value:q.subtotal, status:"quoted", source:"quote builder",
+    notes:`Quote built: ${money(q.subtotal)}${roomNote} · ${q.pax} guests` });
   alert("Saved to the enquiry dashboard.");
 }
 
 /* ============================================================ ENQUIRIES */
 const ENQ_STAGES=[["new","New"],["contacted","Contacted"],["quoted","Quoted"],["won","Won"],["lost","Lost"]];
 function renderEnquiries(v){
-  const head1=head("Enquiries","Every enquiry captured through the portal or shared form.");
-  v.appendChild(head1);
+  v.appendChild(head("Enquiry Dashboard","Track every enquiry across all channels — website, agents, chat and manual — through to won or lost."));
   const tb=el("div","enq-toolbar");
   tb.innerHTML=`<button class="btn" id="enq-new">+ New enquiry</button>
-    <button class="btn ghost" id="enq-link">Copy shareable form link</button><div class="spacer"></div>`;
+    <button class="btn ghost" id="enq-chat">Open events chat</button>
+    <button class="btn ghost" id="enq-link">Copy shareable link</button><div class="spacer"></div>`;
   v.appendChild(tb);
   $("#enq-new").onclick=()=>openEnquiryForm({});
-  $("#enq-link").onclick=()=>{ const url=location.href.split("#")[0]+"#enquire";
-    navigator.clipboard?.writeText(url); alert("Shareable enquiry link copied:\n"+url+"\n\n(Public form — customers can submit without logging in.)"); };
+  $("#enq-chat").onclick=()=>switchTab("chat");
+  $("#enq-link").onclick=()=>{ const url=location.href.split("#")[0]+"#events-chat";
+    navigator.clipboard?.writeText(url); alert("Shareable events-chat link copied:\n"+url); };
 
-  const list=Store.all();
+  const list=DB.all();
+
+  // ---- dashboard stat cards ----
+  const now=new Date(), monthAgo=new Date(now-30*864e5);
+  const openCount=list.filter(e=>!["won","lost"].includes(e.status)).length;
+  const wonCount=list.filter(e=>e.status==="won").length;
+  const newThisMonth=list.filter(e=>new Date(e.created)>=monthAgo).length;
+  const pipelineVal=list.filter(e=>!["lost"].includes(e.status)).reduce((s,e)=>s+(e.value||0),0);
+  const conv = list.length? Math.round(wonCount/list.length*100):0;
+  const stats=el("div","stat-cards");
+  stats.innerHTML=`
+    <div class="stat-card"><div class="sc-v">${list.length}</div><div class="sc-k">Total enquiries</div></div>
+    <div class="stat-card"><div class="sc-v">${openCount}</div><div class="sc-k">Open / in progress</div></div>
+    <div class="stat-card"><div class="sc-v">${newThisMonth}</div><div class="sc-k">New this month</div></div>
+    <div class="stat-card"><div class="sc-v">${wonCount}</div><div class="sc-k">Won</div></div>
+    <div class="stat-card accent"><div class="sc-v">${money(pipelineVal)}</div><div class="sc-k">Pipeline value</div></div>
+    <div class="stat-card"><div class="sc-v">${conv}%</div><div class="sc-k">Conversion</div></div>`;
+  v.appendChild(stats);
+
   if(!list.length){ v.appendChild(el("div","empty",`<div class="big">No enquiries yet</div>
-    Log one manually, or share the enquiry form link with customers.`)); return; }
+    Log one manually, share the events-chat link, or forward website leads here.`)); return; }
 
+  // ---- source breakdown ----
+  const bySource={}; list.forEach(e=>{ const s=e.source||"manual"; bySource[s]=(bySource[s]||0)+1; });
+  const srcBar=el("div","source-bar");
+  srcBar.innerHTML=`<span class="sb-label">By channel:</span>`+
+    Object.entries(bySource).map(([s,n])=>`<span class="src-pill">${s} <b>${n}</b></span>`).join("");
+  v.appendChild(srcBar);
+
+  // ---- pipeline board ----
   const cols=el("div","enq-cols");
   ENQ_STAGES.forEach(([sid,slabel])=>{
     const items=list.filter(e=>e.status===sid);
@@ -492,8 +674,8 @@ function renderEnquiries(v){
       const et=EVENT_TYPES.find(t=>t.id===e.event);
       const card=el("div","enq-card");
       card.innerHTML=`<div class="nm">${e.name}</div>
-        <div class="meta">${et?et.label:"—"} · ${e.pax||"?"} guests${e.date?" · "+new Date(e.date).toLocaleDateString("en-GB"):""}</div>
-        <div class="tags">${room?`<span class="tag">${room.name}</span>`:""}${e.value?`<span class="tag">${money(e.value)}</span>`:""}<span class="tag">${e.source||"manual"}</span></div>`;
+        <div class="meta">${et?et.icon+" "+et.label:"—"} · ${e.pax||"?"} guests${e.date?" · "+e.date:""}</div>
+        <div class="tags">${room?`<span class="tag">${room.name}</span>`:""}${e.value?`<span class="tag">${money(e.value)}</span>`:""}${e.budget?`<span class="tag">${e.budget}</span>`:""}${e.costing?`<span class="tag profit">${money(Math.round(e.costing.profit))} profit</span>`:""}<span class="tag src">${e.source||"manual"}</span></div>`;
       card.onclick=()=>openEnquiryDetail(e);
       col.appendChild(card);
     });
@@ -518,7 +700,7 @@ function openEnquiryForm(pre){
   $("#e-submit").onclick=()=>{
     const name=$("#e-name").value.trim();
     if(!name){ $("#e-name").focus(); return; }
-    Store.add({ name, company:$("#e-co").value, email:$("#e-email").value, phone:$("#e-phone").value,
+    DB.add({ name, company:$("#e-co").value, email:$("#e-email").value, phone:$("#e-phone").value,
       event:$("#e-event").value, date:$("#e-date").value, room:$("#e-room").value,
       pax:parseInt($("#e-pax").value)||null, notes:$("#e-notes").value, source:"manual" });
     closeModal(); render();
@@ -537,22 +719,33 @@ function openEnquiryDetail(e){
       <p style="font-size:14px">${e.date?`Date: ${e.date} · `:""}${e.budget?`Budget: ${e.budget} · `:""}${e.accommodation?`Accommodation: ${e.accommodation}`:""}</p>`:""}
     ${e.notes?`<div class="sec-title">Enquiry brief</div><p style="font-size:14px;line-height:1.6">${e.notes}</p>`:""}
     <p class="qs-sub" style="margin-top:10px">Source: ${e.source||"manual"}</p>
+    ${e.costing?`<div class="sec-title">Profitability</div>
+      <div class="enq-costing">
+        <div><span class="ec-v">${money(Math.round(e.costing.profit))}</span><span class="ec-k">Est. profit</span></div>
+        <div><span class="ec-v">${Math.round(e.costing.margin*100)}%</span><span class="ec-k">Margin</span></div>
+        <div><span class="ec-v">${money(Math.round(e.costing.perCover))}</span><span class="ec-k">Per cover</span></div>
+      </div>
+      <p class="qs-sub" style="margin-top:6px">Costed ${new Date(e.costing.at).toLocaleDateString("en-GB")}</p>`:""}
+    <div class="dual-btn" style="margin-top:16px">
+      <button class="btn" id="enq-cost">${e.costing?"Re-cost this event":"Cost this event"}</button>
+      <button class="btn ghost" id="enq-quote">Create a quote</button>
+    </div>
     <div class="sec-title">Move to stage</div>
     <div class="chips" id="stage-chips">${ENQ_STAGES.map(([s,l])=>`<button class="chip ${e.status===s?"on":""}" data-s="${s}">${l}</button>`).join("")}</div>
     <div class="qs-sub" style="margin-top:14px">Ref ${e.id} · logged ${new Date(e.created).toLocaleString("en-GB")}</div>`;
   showModal(e.name, e.source==="quote builder"?"From quote builder":"Enquiry", body);
+  $("#enq-cost").onclick=()=>{ closeModal(); profitPrefill={ enquiry:e }; switchTab("profit"); };
+  $("#enq-quote").onclick=()=>{ closeModal(); prefill={room:e.room||"woodlands",event:e.event||"wedding",pax:parseInt(e.pax)||40}; switchTab("quote"); };
   document.querySelectorAll("#stage-chips .chip").forEach(c=>c.onclick=()=>{
-    Store.update(e.id,{status:c.dataset.s}); closeModal(); render();
+    DB.update(e.id,{status:c.dataset.s}); closeModal(); render();
   });
 }
 
 /* ============================================================ ADMIN */
 function renderAdmin(v){
-  v.appendChild(head("Admin","Reference data currently loaded. Editable data tables and M&E audit import land here."));
+  v.appendChild(head("Admin","Reference data, room readiness and competitor benchmarking for the team."));
   v.appendChild(el("div","admin-note",
-    `<b>Demo mode.</b> Rooms, hire rates and packages are read from <code>data.js</code>.
-     Equipment recommendations are placeholders pending the M&amp;E audit — once you upload it,
-     these become editable tables saved to Firebase. Enquiries are currently stored in this browser only.`));
+    `<b>Demo mode.</b> Rooms, rates and packages read from <code>data.js</code>. Enquiries are stored in this browser only until Firebase is connected.`));
 
   v.appendChild(el("div","sec-title","Users"));
   const ut=el("table","data-table");
@@ -560,12 +753,34 @@ function renderAdmin(v){
     Object.values(USERS).map(u=>`<tr><td>${u.name}</td><td>${u.code}</td><td>${u.role}</td></tr>`).join("");
   v.appendChild(ut);
 
+  // Room readiness (from M&E audit) — admin only
+  v.appendChild(el("div","sec-title","Room readiness (M&E audit)"));
+  const rd=el("table","data-table");
+  rd.innerHTML=`<tr><th>Room</th><th>Status</th><th>Note</th></tr>`+
+    ROOMS.map(r=>{ const t=roomTech(r);
+      const status = t.sellable
+        ? `<span class="badge-ok">✓ Ready to sell</span>`
+        : `<span style="color:#b3261e;font-weight:600">✗ Not ready</span>`;
+      return `<tr><td>${r.name}</td><td>${status}</td><td style="font-size:12.5px;color:var(--muted)">${t.adminNote||"—"}</td></tr>`;
+    }).join("");
+  v.appendChild(rd);
+
   v.appendChild(el("div","sec-title","Rooms & hire rates"));
   const rt=el("table","data-table");
   rt.innerHTML=`<tr><th>Room</th><th>m²</th><th>Max cap</th><th>Half day</th><th>Full day</th></tr>`+
     ROOMS.map(r=>{const h=ROOM_HIRE[r.id]||{};
       return `<tr><td>${r.name}</td><td>${r.m2}</td><td>${maxCap(r)}</td><td>${h.half?money(h.half):"—"}</td><td>${h.full?money(h.full):"—"}</td></tr>`;}).join("");
   v.appendChild(rt);
+
+  // Competitor benchmarking
+  v.appendChild(el("div","sec-title","Competitor benchmarking"));
+  v.appendChild(el("p","",`<span style="font-size:13px;color:var(--muted);font-style:italic">${COMPSET_NOTE}</span>`));
+  const ct=el("table","data-table");
+  ct.innerHTML=`<tr><th>Hotel</th><th>DDR</th><th>24hr</th><th>Wedding</th><th>Christmas</th><th>Afternoon Tea</th><th>Baby Shower</th></tr>`+
+    COMPETITORS.map(c=>`<tr${c.us?' style="background:#eef2f8;font-weight:600"':''}>
+      <td>${c.name}${c.us?' <span class="feat-tag" style="background:var(--navy)">US</span>':''}</td>
+      <td>${c.ddr}</td><td>${c.h24}</td><td>${c.wedding}</td><td>${c.xmas}</td><td>${c.aftTea}</td><td>${c.babyShower}</td></tr>`).join("");
+  v.appendChild(ct);
 }
 
 /* ============================================================ SUPPLIERS */
@@ -641,62 +856,74 @@ function renderChat(v){
 function startBot(frame){
   BOT={ active:true, steps:[], idx:0, answers:{}, eventType:null, phase:"start" };
   frame.innerHTML=`
-    <div class="chat-header"><img src="assets/bh-logo.svg" alt="">
-      <div><div class="ct">Brandon Hall Events</div><div class="cs">Typically replies in minutes</div></div></div>
+    <div class="chat-header">
+      <div class="avatar">${BOT_PERSON.avatar}</div>
+      <div><div class="ct">${BOT_PERSON.name}</div><div class="cs">${BOT_PERSON.role}</div></div>
+      <div class="online"></div></div>
     <div class="chat-body" id="chat-body"></div>
     <div class="chat-opts" id="chat-opts"></div>
-    <div class="chat-input" id="chat-input"><input placeholder="Type your answer…" id="chat-field">
-      <button id="chat-send">→</button></div>`;
-  botSay(BOT_INTRO);
-  BOT.steps=BOT_COMMON_START.slice();
-  setTimeout(()=>askNext(),500);
+    <div class="chat-input" id="chat-input"><input placeholder="Type your message…" id="chat-field">
+      <button id="chat-send" aria-label="Send">➤</button></div>`;
+  // sequential greeting bubbles, then first question
+  let d=400;
+  BOT_GREETINGS.forEach((g,i)=>{ setTimeout(()=>botSay(g), d); d+=g.length*18+400; });
+  BOT.steps=[...BOT_COMMON_START];
+  setTimeout(()=>askNext(), d);
   $("#chat-send").onclick=submitChat;
   $("#chat-field").addEventListener("keydown",e=>{ if(e.key==="Enter")submitChat(); });
 }
+function typing(cb){ const b=$("#chat-body"); if(!b){cb&&cb();return;}
+  const t=el("div","bubble bot typing","<span></span><span></span><span></span>");
+  b.appendChild(t); b.scrollTop=b.scrollHeight;
+  setTimeout(()=>{ t.remove(); cb&&cb(); }, 650);
+}
 function botSay(text){ const b=$("#chat-body"); if(!b)return;
-  const bub=el("div","bubble bot",text); b.appendChild(bub); b.scrollTop=b.scrollHeight; }
+  typing(()=>{ const bub=el("div","bubble bot",text.replace(/\n/g,"<br>")); b.appendChild(bub);
+    b.scrollTop=b.scrollHeight; }); }
 function userSay(text){ const b=$("#chat-body"); if(!b)return;
   const bub=el("div","bubble user",text); b.appendChild(bub); b.scrollTop=b.scrollHeight; }
+function fillName(q){ return q.replace("{name}", BOT.answers.name? BOT.answers.name.split(" ")[0] : "there"); }
 function askNext(){
   const opts=$("#chat-opts"); opts.innerHTML="";
   if(BOT.idx>=BOT.steps.length){ finishBot(); return; }
   const step=BOT.steps[BOT.idx];
-  botSay(step.q);
-  if(step.type==="choice"){
-    $("#chat-input").style.display="none";
-    step.options.forEach(([val,label])=>{ const b=el("button",null,label);
-      b.onclick=()=>answerStep(step,val,label); opts.appendChild(b); });
-    if(step.optional){ const sk=el("button",null,"Skip"); sk.onclick=()=>answerStep(step,"","(skipped)"); opts.appendChild(sk); }
-  } else {
-    $("#chat-input").style.display="flex";
-    $("#chat-field").value=""; $("#chat-field").focus();
-    if(step.optional){ const sk=el("button",null,"Skip"); sk.onclick=()=>answerStep(step,"","(skipped)"); opts.appendChild(sk); }
-  }
+  botSay(fillName(step.q));
+  const delay=700;
+  setTimeout(()=>{
+    if(step.type==="choice"){
+      $("#chat-input").style.display="none";
+      step.options.forEach(([val,label])=>{ const bt=el("button",null,label);
+        bt.onclick=()=>answerStep(step,val,label); opts.appendChild(bt); });
+      if(step.optional){ const sk=el("button","skip","Skip"); sk.onclick=()=>answerStep(step,"","— skipped —"); opts.appendChild(sk); }
+    } else {
+      $("#chat-input").style.display="flex";
+      $("#chat-field").value=""; $("#chat-field").focus();
+      if(step.optional){ const sk=el("button","skip","Skip this"); sk.onclick=()=>answerStep(step,"","— skipped —"); opts.appendChild(sk); }
+    }
+  }, delay);
 }
 function submitChat(){ const f=$("#chat-field"); const val=f.value.trim();
-  const step=BOT.steps[BOT.idx]; if(!val && !step.optional)return; answerStep(step,val,val||"(skipped)"); }
+  const step=BOT.steps[BOT.idx]; if(!val && !step.optional)return; answerStep(step,val,val||"— skipped —"); }
 function answerStep(step,val,label){
   userSay(label);
+  $("#chat-opts").innerHTML="";
   BOT.answers[step.key]=val;
-  // branch after event type
   if(step.key==="eventType"){
     BOT.eventType=val;
     BOT.steps = [...BOT_COMMON_START, ...botFlowFor(val), ...BOT_CONTACT];
   }
   BOT.idx++;
-  setTimeout(askNext,350);
+  setTimeout(askNext,450);
 }
 function finishBot(){
   $("#chat-opts").innerHTML=""; $("#chat-input").style.display="none";
-  botSay("Perfect — thank you! I've passed everything to our events team and they'll be in touch very soon. 🎉");
+  botSay(fillName(BOT_SIGNOFF));
   const a=BOT.answers;
-  // map to enquiry record
   const paxGuess = a.pax || a.paxDay || (a.paxEve? a.paxEve : null);
-  Store.add({
+  const record={
     name:a.name||"(via chat)", email:a.email||"", phone:a.phone||"",
-    event:a.eventType||"other",
-    date:a.date||"", pax: paxGuess? parseInt(paxGuess)||paxGuess : null,
-    room:"", source:"events chat",
+    event:a.eventType||"other", date:a.date||"",
+    pax: paxGuess? parseInt(paxGuess)||paxGuess : null, room:"", source:"events chat",
     budget:a.budget||"", accommodation:a.accommodation||"",
     notes:[ a.eventName?`Event: ${a.eventName}`:"", a.days?`Days: ${a.days}`:"",
       a.layout?`Layout: ${a.layout}`:"", a.av?`AV: ${a.av}`:"",
@@ -704,10 +931,280 @@ function finishBot(){
       a.dateFlex?`Date ${a.dateFlex}`:"", a.paxEve?`Evening guests: ${a.paxEve}`:"",
       a.extras?`Extras: ${a.extras}`:"", a.agent?`Agent/company: ${a.agent}`:"",
       a.notes?`Notes: ${a.notes}`:"" ].filter(Boolean).join(" · ")
-  });
-  const opts=$("#chat-opts");
-  const again=el("button",null,"Start another enquiry"); again.onclick=()=>startBot($("#chat-frame"));
-  opts.appendChild(again);
+  };
+  (async()=>{
+    // On the public chat page there's no logged-in user; sign in anonymously so
+    // the enquiry lands in the shared Firestore. Falls back to demo Store.
+    if(FB.ready && !FB.user){ const ok=await fbEnsureAnon();
+      if(ok){ try{ await FB.db.collection("enquiries").add({...record,
+        created:new Date().toISOString(), status:"new"}); return; }catch(e){ console.warn(e.message); } } }
+    DB.add(record);
+  })();
+  setTimeout(()=>{ const opts=$("#chat-opts");
+    const again=el("button",null,"Make another enquiry"); again.onclick=()=>startBot($("#chat-frame"));
+    opts.appendChild(again); }, 1400);
+}
+
+/* ============================================================ PROFITABILITY TOOL */
+let PROFIT=null, profitPrefill=null, profitEnquiry=null;
+const ScenarioStore={ key:"bh_scenarios",
+  all(){ try{return JSON.parse(localStorage.getItem(this.key))||[]}catch{return[]} },
+  save(l){ localStorage.setItem(this.key,JSON.stringify(l)); },
+  add(s){ const l=this.all(); s.id="SC-"+Date.now().toString(36).toUpperCase(); l.unshift(s); this.save(l); },
+  remove(id){ this.save(this.all().filter(x=>x.id!==id)); } };
+
+function applyTemplate(key){
+  const t=PROFIT_TEMPLATES[key]; if(!t)return;
+  PROFIT.elements=JSON.parse(JSON.stringify(t.elements));
+  PROFIT.payroll=JSON.parse(JSON.stringify(t.payroll));
+  PROFIT.controllable=JSON.parse(JSON.stringify(t.controllable));
+  PROFIT.bevSpendPP=t.bevSpend; PROFIT._price=t.price; PROFIT._template=key;
+}
+
+function renderProfit(v){
+  v.appendChild(head("Event Profitability Tool","Price an event and see live profit, margin, break-even and a cost breakdown. Load a template, save scenarios, print a summary."));
+  if(!PROFIT){ PROFIT=JSON.parse(JSON.stringify(PROFIT_DEFAULTS)); PROFIT._price=106.50; PROFIT._template="wedding"; }
+
+  // pre-fill from an enquiry if opened via the dashboard
+  profitEnquiry=null; let preName="", preCovers="60";
+  if(profitPrefill && profitPrefill.enquiry){
+    const e=profitPrefill.enquiry; profitEnquiry=e;
+    preName=`${e.name}${e.event?" — "+(EVENT_TYPES.find(t=>t.id===e.event)?.label||""):""}`;
+    if(e.pax) preCovers=String(parseInt(e.pax)||60);
+    // auto-load the matching template for the enquiry's event type
+    applyTemplate(templateForEvent(e.event));
+    if(e.costing && e.costing.price) PROFIT._price=e.costing.price;
+    profitPrefill=null;
+  }
+  const prePrice=String(PROFIT._price!=null?PROFIT._price:106.50);
+  if(profitEnquiry){
+    const banner=el("div","profit-banner",
+      `Costing enquiry: <b>${profitEnquiry.name}</b> · ${profitEnquiry.pax||"?"} guests · template auto-loaded. Your result saves back to this enquiry.`);
+    v.appendChild(banner);
+  }
+
+  const wrap=el("div","profit-layout");
+  // ---- inputs ----
+  const inp=el("div","profit-inputs");
+  inp.innerHTML=`
+    <div class="quote-panel">
+      <div class="tmpl-row">
+        <label>Load template</label>
+        <select id="p-template">${Object.entries(PROFIT_TEMPLATES).map(([k,t])=>`<option value="${k}" ${PROFIT._template===k?"selected":""}>${t.label}</option>`).join("")}</select>
+        <button class="btn sm" id="p-apply">Apply</button>
+      </div>
+      <h3>Event</h3>
+      <div class="form-grid">
+        <div class="full"><label>Event name</label><input id="p-name" placeholder="e.g. Extra Special Wedding" value="${preName.replace(/"/g,'&quot;')}"></div>
+        <div><label>Package price per cover (inc VAT)</label><input id="p-price" type="number" value="${prePrice}" step="0.5"></div>
+        <div><label>Number of covers</label><input id="p-covers" type="number" value="${preCovers}"></div>
+        <div class="full"><label>Est. beverage on-spend (total, inc VAT)</label><input id="p-bev" type="number" value="${PROFIT.bevSpendPP}" step="0.5"></div>
+      </div>
+
+      <h3 style="margin-top:20px">Package elements <span class="qs-sub">(per cover, inc VAT)</span></h3>
+      <div class="elem-grid" id="p-elements"></div>
+      <div class="elem-total" id="p-elemtotal"></div>
+
+      <h3 style="margin-top:20px">Payroll</h3>
+      <table class="pay-table" id="p-payroll"></table>
+
+      <h3 style="margin-top:20px">Controllable costs <span class="qs-sub">(net of VAT, not recharged)</span></h3>
+      <div class="elem-grid" id="p-controllable"></div>
+
+      <h3 style="margin-top:20px">Cost of sales &amp; commission</h3>
+      <div class="form-grid">
+        <div><label>Food CoS %</label><input id="p-foodcos" type="number" value="${PROFIT.foodCoS*100}" step="1"></div>
+        <div><label>Beverage CoS %</label><input id="p-bevcos" type="number" value="${PROFIT.bevCoS*100}" step="1"></div>
+        <div><label>Commission %</label><input id="p-comm" type="number" value="${PROFIT.commissionRate*100}" step="1"></div>
+        <div><label>VAT %</label><input id="p-vat" type="number" value="${PROFIT.vat*100}" step="1"></div>
+      </div>
+    </div>`;
+  wrap.appendChild(inp);
+
+  // ---- results ----
+  const res=el("div","profit-results");
+  res.innerHTML=`<div class="quote-panel profit-summary"><h3>Profitability</h3><div id="p-out"></div>
+    ${profitEnquiry?`<button class="btn block" id="p-save" style="margin-top:14px">Save costing to ${profitEnquiry.name.split(" ")[0]}'s enquiry</button>`:""}
+    <div class="dual-btn"><button class="btn ${profitEnquiry?'ghost':''}" id="p-scenario">Save scenario</button>
+    <button class="btn ghost" id="p-print">Print</button></div>
+    <div id="p-scenarios"></div></div>`;
+  wrap.appendChild(res);
+  v.appendChild(wrap);
+
+  // build element inputs
+  const elemLabels={ food:"Food", alcohol:"Drinks — Alcoholic", soft:"Drinks — Soft", roomHire:"Room hire",
+    dj:"DJ / Music", linen:"Linen hire", toastmaster:"Toastmaster", eveBuffet:"Evening buffet", bedroom:"Bedroom", av:"AV" };
+  $("#p-elements").innerHTML=Object.entries(elemLabels).map(([k,l])=>
+    `<div class="elem-row"><label>${l}</label><input type="number" data-elem="${k}" value="${PROFIT.elements[k]}" step="0.5"></div>`).join("");
+  const ctrlLabels={ equipment:"Equipment rental", linen:"Linen costs", security:"Security", other:"Other" };
+  $("#p-controllable").innerHTML=Object.entries(ctrlLabels).map(([k,l])=>
+    `<div class="elem-row"><label>${l}</label><input type="number" data-ctrl="${k}" value="${PROFIT.controllable[k]}" step="1"></div>`).join("");
+  // payroll table
+  $("#p-payroll").innerHTML=`<tr><th>Role</th><th>£/hr</th><th>Staff</th><th>Hours</th><th>Cost</th></tr>`+
+    PROFIT.payroll.map((p,i)=>`<tr>
+      <td>${p.role}</td>
+      <td><input type="number" data-pay="${i}" data-f="rate" value="${p.rate}" step="0.5"></td>
+      <td><input type="number" data-pay="${i}" data-f="staff" value="${p.staff}"></td>
+      <td><input type="number" data-pay="${i}" data-f="hours" value="${p.hours}"></td>
+      <td data-paycost="${i}">—</td></tr>`).join("");
+
+  // wire all inputs
+  v.querySelectorAll("input").forEach(i=>i.addEventListener("input",calcProfit));
+  $("#p-apply").onclick=()=>{ applyTemplate($("#p-template").value); switchTab("profit"); };
+  $("#p-print").onclick=printProfit;
+  $("#p-scenario").onclick=saveScenario;
+  if($("#p-save")) $("#p-save").onclick=()=>{
+    const p=gatherProfit();
+    DB.update(profitEnquiry.id,{ costing:{ profit:p.profit, margin:p.margin,
+      perCover:p.covers?p.profit/p.covers:0, price:p.price, covers:p.covers, at:new Date().toISOString() }});
+    alert(`Costing saved to ${profitEnquiry.name}'s enquiry.\nProfit ${money(Math.round(p.profit))} · ${Math.round(p.margin*100)}% margin`);
+    switchTab("enquiries");
+  };
+  renderScenarios();
+  calcProfit();
+}
+
+function saveScenario(){
+  const p=gatherProfit();
+  const name=prompt("Name this scenario (e.g. '80 guests', 'Special package'):", p.name||"Scenario");
+  if(name===null)return;
+  ScenarioStore.add({ name, profit:p.profit, margin:p.margin, covers:p.covers, price:p.price,
+    perCover:p.covers?p.profit/p.covers:0, at:new Date().toISOString() });
+  renderScenarios();
+}
+function renderScenarios(){
+  const box=$("#p-scenarios"); if(!box)return;
+  const list=ScenarioStore.all();
+  if(!list.length){ box.innerHTML=""; return; }
+  box.innerHTML=`<div class="sec-title" style="margin-top:18px">Saved scenarios</div>`+
+    `<table class="scenario-table"><tr><th>Scenario</th><th>Covers</th><th>Profit</th><th>Margin</th><th></th></tr>`+
+    list.map(s=>`<tr>
+      <td>${s.name}</td><td>${s.covers}</td>
+      <td style="color:${s.profit>=0?'var(--ok)':'#b3261e'};font-weight:600">${money(Math.round(s.profit))}</td>
+      <td>${Math.round(s.margin*100)}%</td>
+      <td><button class="sc-del" data-id="${s.id}">×</button></td></tr>`).join("")+`</table>`;
+  box.querySelectorAll(".sc-del").forEach(b=>b.onclick=()=>{ ScenarioStore.remove(b.dataset.id); renderScenarios(); });
+}
+
+function gatherProfit(){
+  const num=id=>parseFloat($(id)?.value)||0;
+  const price=num("#p-price"), covers=num("#p-covers"), bevPP=num("#p-bev");
+  const vat=num("#p-vat")/100, foodCoS=num("#p-foodcos")/100, bevCoS=num("#p-bevcos")/100, comm=num("#p-comm")/100;
+  const elements={}; document.querySelectorAll("[data-elem]").forEach(i=>elements[i.dataset.elem]=parseFloat(i.value)||0);
+  const controllable={}; document.querySelectorAll("[data-ctrl]").forEach(i=>controllable[i.dataset.ctrl]=parseFloat(i.value)||0);
+  const payroll=PROFIT.payroll.map((p,i)=>({ role:p.role,
+    rate:parseFloat(document.querySelector(`[data-pay="${i}"][data-f="rate"]`)?.value)||0,
+    staff:parseFloat(document.querySelector(`[data-pay="${i}"][data-f="staff"]`)?.value)||0,
+    hours:parseFloat(document.querySelector(`[data-pay="${i}"][data-f="hours"]`)?.value)||0 }));
+
+  const elemTotal=Object.values(elements).reduce((a,b)=>a+b,0);
+  // revenue (inc VAT) — mirrors the spreadsheet exactly.
+  // Beverage estimate (bevPP) is treated as a FLAT total spend, not per-cover.
+  const revFood=covers*(elements.food+elements.soft);
+  const revBev=covers*elements.alcohol + bevPP;
+  const revRoom=covers*elements.roomHire;
+  const revOther=covers*(elements.dj+elements.linen+elements.toastmaster+elements.eveBuffet+elements.bedroom+elements.av);
+  const grossRev=(price*covers)+bevPP;
+  // net of VAT
+  const netFood=revFood/(1+vat), netBev=revBev/(1+vat), netRoom=revRoom/(1+vat), netOther=revOther/(1+vat);
+  const netRev=netFood+netBev+netRoom+netOther;
+  // cost of sales
+  const cosFood=netFood*foodCoS, cosBev=netBev*bevCoS, cosTotal=cosFood+cosBev;
+  // payroll
+  const payrollCost=payroll.reduce((s,p)=>s+p.rate*p.staff*p.hours,0);
+  payroll.forEach((p,i)=>{ const cell=document.querySelector(`[data-paycost="${i}"]`); if(cell)cell.textContent=money(p.rate*p.staff*p.hours); });
+  const ctrlTotal=Object.values(controllable).reduce((a,b)=>a+b,0);
+  const commCost=Math.round(netRev*comm*100)/100;
+  const profit=netRev-cosTotal-payrollCost-ctrlTotal-commCost;
+  const margin=netRev? profit/netRev : 0;
+  // break-even: fixed costs (payroll+controllable) vs per-cover contribution (net rev/cover − variable CoS/cover)
+  const fixedCost=payrollCost+ctrlTotal;
+  const netPerCover=covers? netRev/covers : 0;
+  const cosPerCover=covers? cosTotal/covers : 0;
+  const contribPerCover=netPerCover-cosPerCover;
+  const breakEven=contribPerCover>0? Math.ceil(fixedCost/contribPerCover) : null;
+  return { name:$("#p-name")?.value||"Event", price, covers, grossRev, netRev, netFood, netBev, netRoom, netOther,
+    cosFood, cosBev, cosTotal, payrollCost, payroll, ctrlTotal, controllable, commCost, profit, margin, elemTotal,
+    fixedCost, contribPerCover, breakEven };
+}
+function calcProfit(){
+  const p=gatherProfit(); const out=$("#p-out"); if(!out)return;
+  const et=$("#p-elemtotal"); if(et){ const match=Math.abs(p.elemTotal-p.price)<0.5;
+    et.innerHTML=`Total package elements: <b>${money(p.elemTotal)}</b> ${match?'<span class="ok-chk">✓ matches price</span>':`<span class="warn-chk">⚠ price is ${money(p.price)}</span>`}`; }
+  const profitColour = p.margin>=0.5?"#4a7c59":p.margin>=0.3?"#c07a3e":"#b3261e";
+
+  // stacked cost-vs-profit bar (as % of net revenue)
+  const base=Math.max(p.netRev,1);
+  const seg=(val,cls,label)=>{ const pct=Math.max(0,val/base*100); return pct>0.5?
+    `<div class="bar-seg ${cls}" style="width:${pct}%" title="${label}: ${money(Math.round(val))}"></div>`:""; };
+  const profitPct=Math.max(0,p.profit/base*100);
+  const bar=`<div class="cost-bar">
+    ${seg(p.cosFood,"s-food","Food CoS")}${seg(p.cosBev,"s-bev","Beverage CoS")}
+    ${seg(p.payrollCost,"s-pay","Payroll")}${seg(p.ctrlTotal,"s-ctrl","Controllable")}
+    ${seg(p.commCost,"s-comm","Commission")}
+    <div class="bar-seg ${p.profit>=0?'s-profit':'s-loss'}" style="width:${Math.abs(profitPct)}%" title="Profit"></div>
+  </div>
+  <div class="bar-legend">
+    <span><i class="s-food"></i>Food</span><span><i class="s-bev"></i>Bev</span>
+    <span><i class="s-pay"></i>Payroll</span><span><i class="s-ctrl"></i>Controllable</span>
+    <span><i class="${p.profit>=0?'s-profit':'s-loss'}"></i>${p.profit>=0?'Profit':'Loss'}</span>
+  </div>`;
+
+  const beText = p.breakEven!=null
+    ? (p.breakEven<=p.covers
+        ? `<span class="be-ok">Break-even at ${p.breakEven} covers</span> — you're ${p.covers-p.breakEven} above it.`
+        : `<span class="be-warn">Break-even at ${p.breakEven} covers</span> — ${p.breakEven-p.covers} more needed at this price.`)
+    : `<span class="be-warn">No break-even — costs exceed revenue per cover.</span>`;
+
+  out.innerHTML=`
+    <div class="profit-hero" style="background:linear-gradient(135deg,${profitColour},${profitColour}dd)">
+      <div class="ph-profit">${money(Math.round(p.profit))}</div>
+      <div class="ph-label">Estimated event profit</div>
+      <div class="ph-margin">${Math.round(p.margin*100)}% margin to sales</div>
+    </div>
+    ${bar}
+    <div class="break-even">${beText}</div>
+    <table class="prof-table">
+      <tr><td>Gross revenue (inc VAT)</td><td>${money(Math.round(p.grossRev))}</td></tr>
+      <tr class="net"><td>Net revenue (ex VAT)</td><td>${money(Math.round(p.netRev))}</td></tr>
+      <tr><td>Food cost of sales</td><td class="neg">−${money(Math.round(p.cosFood))}</td></tr>
+      <tr><td>Beverage cost of sales</td><td class="neg">−${money(Math.round(p.cosBev))}</td></tr>
+      <tr><td>Payroll</td><td class="neg">−${money(Math.round(p.payrollCost))}</td></tr>
+      <tr><td>Controllable costs</td><td class="neg">−${money(Math.round(p.ctrlTotal))}</td></tr>
+      ${p.commCost?`<tr><td>Commission</td><td class="neg">−${money(Math.round(p.commCost))}</td></tr>`:""}
+      <tr class="total"><td>Event profit</td><td>${money(Math.round(p.profit))}</td></tr>
+    </table>
+    <div class="prof-pp">Profit per cover: <b>${money(p.covers?Math.round(p.profit/p.covers):0)}</b> · Contribution per cover: <b>${money(Math.round(p.contribPerCover))}</b></div>`;
+}
+function printProfit(){
+  const p=gatherProfit();
+  const win=window.open("","_blank");
+  const payRows=p.payroll.map(r=>`<tr><td>${r.role}</td><td>£${r.rate}/hr × ${r.staff} × ${r.hours}h</td><td style="text-align:right">${money(Math.round(r.rate*r.staff*r.hours))}</td></tr>`).join("");
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Profitability — ${p.name}</title>
+    <style>@page{margin:20mm}body{font-family:'Inter',Arial,sans-serif;color:#1a2230;font-size:12px}
+    .top{border-bottom:2px solid #1a2b47;padding-bottom:12px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:flex-end}
+    h1{font-family:Georgia,serif;font-size:24px;color:#1a2b47;margin:0}.muted{color:#7a8494;font-size:11px}
+    h2{font-size:14px;color:#9d7d5f;margin:18px 0 6px;border-bottom:1px solid #e8dccf;padding-bottom:3px}
+    table{width:100%;border-collapse:collapse}td,th{padding:6px 4px;border-bottom:1px solid #e3e7ee;text-align:left}
+    .r{text-align:right}.neg{color:#b3261e}.hero{background:#1a2b47;color:#fff;border-radius:10px;padding:16px;margin:14px 0;text-align:center}
+    .hero .big{font-family:Georgia,serif;font-size:32px}.total td{font-weight:700;font-size:14px;border-top:2px solid #1a2b47}</style></head><body>
+    <div class="top"><div><h1>Event Profitability</h1><div class="muted">${p.name}</div></div>
+      <div class="muted">Brandon Hall Hotel &amp; Spa<br>${new Date().toLocaleDateString("en-GB")}</div></div>
+    <div class="hero"><div class="big">${money(Math.round(p.profit))}</div>
+      <div>Estimated profit · ${Math.round(p.margin*100)}% margin · ${money(p.covers?Math.round(p.profit/p.covers):0)} per cover</div></div>
+    <h2>Revenue</h2><table>
+      <tr><td>Package price ${money(p.price)} × ${p.covers} covers + beverage</td><td class="r">${money(Math.round(p.grossRev))} inc VAT</td></tr>
+      <tr class="total"><td>Net revenue (ex VAT)</td><td class="r">${money(Math.round(p.netRev))}</td></tr></table>
+    <h2>Costs</h2><table>
+      <tr><td>Food cost of sales</td><td class="r neg">−${money(Math.round(p.cosFood))}</td></tr>
+      <tr><td>Beverage cost of sales</td><td class="r neg">−${money(Math.round(p.cosBev))}</td></tr>
+      ${payRows}
+      <tr><td>Controllable costs</td><td class="r neg">−${money(Math.round(p.ctrlTotal))}</td></tr>
+      ${p.commCost?`<tr><td>Commission</td><td class="r neg">−${money(Math.round(p.commCost))}</td></tr>`:""}
+      <tr class="total"><td>Estimated event profit</td><td class="r">${money(Math.round(p.profit))}</td></tr></table>
+    <p class="muted" style="margin-top:20px">Internal costing only — not for circulation to customers.</p>
+    <script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script></body></html>`);
+  win.document.close();
 }
 
 /* ============================================================ HELPERS */
