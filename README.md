@@ -3,11 +3,22 @@
 A staff-facing sales portal for Brandon Hall Hotel & Spa. Works as a web link and installs as a mobile app (PWA). Sales & marketing tool only — the events operations system is separate.
 
 ## What it does
-- **Rooms** — all 17 rooms with dimensions, capacity by layout, estimated carbon footprint, and recommended layout + equipment filtered by event type (meeting, wedding, baby shower, birthday, celebration, celebration of life, Christmas/NYE). Enter a guest count to see instantly which rooms fit.
+- **Rooms** — all 17 rooms with photos, dimensions, **interactive to-scale seating layout diagrams** (boardroom, U-shape/horseshoe, theatre, cabaret, reception), a **tech & connectivity** panel (screen share, HDMI, video-call, PA, WiFi, flipchart…), estimated carbon footprint, and recommended layout + equipment filtered by event type. Enter a guest count to see instantly which rooms fit.
 - **Packages** — DDR, 24-hour, wedding, celebration and Christmas packages, plus à la carte beverage/food/equipment pricing.
-- **Create Quote** — build a costed quote (customer details, room, package, add-ons), see a live total and carbon estimate, and download a branded PDF to email the customer yourself.
-- **Enquiries** — a pipeline dashboard (New → Contacted → Quoted → Won/Lost). Log enquiries manually or share the public form link.
+- **Suppliers** — fact sheets for DJs/AV, catering, décor, entertainment, florals, with PLI/PAT compliance flags. Sound Kicks loaded; others are placeholders.
+- **Create Quote** — build a costed quote (customer details, room, package, add-ons), see a live total and carbon estimate, then download either a **full branded brochure/proposal PDF** (cover, photos, seating layout, pricing, T&Cs) or a simple quote.
+- **Enquiries** — a pipeline dashboard (New → Contacted → Quoted → Won/Lost) with richer fields (budget, accommodation, source channel, full brief). Log manually or receive them from the chat.
+- **Events Chat** — a guided conversational concierge that captures complete enquiries. Shareable link + copy-paste website button. Adapts questions by event type (modelled on real agent/wedding/website enquiries).
 - **Admin** — reference tables for users, rooms and hire rates. The M&E audit import lands here.
+
+## Branding
+Navy-led to match the live hotel website (`#1a2b47`), with the gold `#BB9979` mark as a secondary accent.
+
+## Images
+Room and gallery photos are linked live from the hotel website, so they load in any normal browser and stay current. To store them locally instead, download them and change the paths in `data.js` (`GALLERY` / `IMG`).
+
+## Events concierge — upgrading to real AI
+The chat currently runs as a **guided branching conversation** (no API key, no cost). To upgrade to the full Claude-powered assistant later: build a Firebase Cloud Function that holds your Anthropic API key server-side and calls the Claude API, then point the chat's answer handler at that function instead of the scripted flow. The captured-enquiry structure stays the same.
 
 ## Logins (demo mode)
 | Name | Code |

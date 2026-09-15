@@ -62,8 +62,8 @@ function boot(){
 }
 function render(){
   const v=$("#view"); v.innerHTML="";
-  ({rooms:renderRooms, packages:renderPackages, quote:renderQuote,
-    enquiries:renderEnquiries, admin:renderAdmin }[CURRENT_TAB]||renderRooms)(v);
+  ({rooms:renderRooms, packages:renderPackages, suppliers:renderSuppliers, quote:renderQuote,
+    enquiries:renderEnquiries, chat:renderChat, admin:renderAdmin }[CURRENT_TAB]||renderRooms)(v);
 }
 
 /* ============================================================ ROOMS */
@@ -71,6 +71,9 @@ let roomFilter={ event:"", pax:"" };
 function renderRooms(v){
   v.appendChild(head("Meeting & Event Rooms",
     "Pick an event type and headcount to see which rooms fit and how to lay them out."));
+  const gal=el("div","gallery");
+  gal.innerHTML=GALLERY.meetings.slice(0,4).map(u=>`<img src="${u}" loading="lazy" onerror="this.style.display='none'">`).join("");
+  v.appendChild(gal);
 
   const bar=el("div","filters");
   bar.innerHTML=`<span class="lbl">Event type</span>`;
@@ -105,7 +108,9 @@ function roomCard(r){
   const c=el("div","room-card"); c.dataset.id=r.id;
   const caps=Object.entries(r.cap).filter(([,n])=>n!=null&&n>0)
     .map(([k,n])=>`<span class="cap-pill"><b>${n}</b> ${LAYOUT_LABELS[k]}</span>`).join("");
-  c.innerHTML=`<h3>${r.name}</h3><div class="m2">${r.m2} m²${r.combined?" · "+r.combined:""}</div>
+  c.innerHTML=`<img class="thumb" src="${roomImage(r)}" alt="${r.name}" loading="lazy"
+      onerror="this.style.display='none'">
+    <h3>${r.name}</h3><div class="m2">${r.m2} m²${r.combined?" · "+r.combined:""}</div>
     <div class="caps">${caps}</div><div class="fit" data-fit></div>`;
   c.onclick=()=>openRoom(r);
   return c;
@@ -122,19 +127,30 @@ function refreshRoomFit(v){
   });
 }
 
+let roomModalLayout="theatre";
 function openRoom(r){
   const pax=parseInt(roomFilter.pax)||Math.round(maxCap(r)*0.6);
   const evId=roomFilter.event||"meeting";
   const et=EVENT_TYPES.find(e=>e.id===evId);
   const lay=bestLayout(r,evId);
+  roomModalLayout=lay;
   const carbon=carbonModel(r,evId,pax);
   const equip=EVENT_EQUIPMENT[evId]||[];
   const hire=ROOM_HIRE[r.id];
+  const tech=roomTech(r);
 
   const caps=Object.entries(r.cap).filter(([,n])=>n!=null).map(([k,n])=>
     `<tr class="${k===lay?"best":""}"><td>${LAYOUT_LABELS[k]}</td><td>${n||"—"}</td></tr>`).join("");
+  const layoutBtns=Object.keys(r.cap).filter(k=>r.cap[k]!=null)
+    .map(k=>`<button class="${k===lay?"on":""}" data-lay="${k}">${LAYOUT_LABELS[k]} (${r.cap[k]})</button>`).join("");
+  const techItems=TECH_FIELDS.map(([key,label])=>{
+    const on=tech[key]; const val=(key==="screen")?on:on;
+    return `<div class="tech-item ${on?"yes":"no"}"><span class="ic">${on?"✓":"—"}</span>
+      <span>${label}${key==="screen"&&typeof on==="string"?": "+on:""}</span></div>`;
+  }).join("");
 
   const body=`
+    <img class="room-hero" src="${roomImage(r)}" alt="${r.name}" onerror="this.style.display='none'">
     <div class="detail-row">
       <div class="stat"><div class="k">Floor area</div><div class="v">${r.m2}<small> m²</small></div></div>
       ${r.length?`<div class="stat"><div class="k">Dimensions</div><div class="v">${r.length}<small>×</small>${r.width}<small> m</small></div></div>`:""}
@@ -145,8 +161,17 @@ function openRoom(r){
     <div class="sec-title">Recommended for ${et.icon} ${et.label}</div>
     <p style="font-size:14px;margin-bottom:6px">Best laid out as <b>${LAYOUT_LABELS[lay]}</b> (seats ${r.cap[lay]||maxCap(r)}).</p>
 
+    <div class="sec-title">Seating layouts</div>
+    <div class="layout-tabs" id="rm-laytabs">${layoutBtns}</div>
+    <div class="layout-view"><div id="rm-layview">${seatingSVG(r,lay,r.cap[lay])}</div>
+      <div class="desc" id="rm-laydesc">${LAYOUT_INFO[lay].desc}</div></div>
+
     <div class="sec-title">Capacity by layout</div>
     <table class="cap-table">${caps}</table>
+
+    <div class="sec-title">Tech &amp; connectivity <span class="dummy-tag">DUMMY — awaiting M&E audit</span></div>
+    <div class="tech-grid">${techItems}</div>
+    ${tech.notes?`<p style="font-size:13px;color:var(--muted);margin-top:8px">${tech.notes}</p>`:""}
 
     <div class="sec-title">Recommended equipment <span class="dummy-tag">DUMMY — awaiting M&E audit</span></div>
     <ul class="equip-list">${equip.map(e=>`<li>${e}</li>`).join("")}</ul>
@@ -159,15 +184,24 @@ function openRoom(r){
       <div class="split" style="margin-top:6px;font-style:italic">Estimated from floor area, occupancy &amp; event type — indicative only.</div>
     </div>
 
-    <div style="margin-top:22px;display:flex;gap:10px">
-      <button class="btn" id="rm-quote">Start a quote for this room</button>
+    <div class="dual-btn">
+      <button class="btn" id="rm-quote">Start a quote</button>
       <button class="btn ghost" id="rm-enq">Log an enquiry</button>
     </div>`;
   showModal(r.name, `${r.m2} m² · ${r.combined||"Function room"}`, body);
-  $("#rm-quote").onclick=()=>{ closeModal(); prefill={room:r.id,event:evId,pax}; CURRENT_TAB="quote";
-    document.querySelectorAll("#tabs button").forEach(x=>x.classList.toggle("active",x.dataset.tab==="quote")); render(); };
+
+  // interactive layout switcher
+  document.querySelectorAll("#rm-laytabs button").forEach(b=>b.onclick=()=>{
+    document.querySelectorAll("#rm-laytabs button").forEach(x=>x.classList.toggle("on",x===b));
+    const k=b.dataset.lay;
+    $("#rm-layview").innerHTML=seatingSVG(r,k,r.cap[k]);
+    $("#rm-laydesc").textContent=LAYOUT_INFO[k].desc;
+  });
+  $("#rm-quote").onclick=()=>{ closeModal(); prefill={room:r.id,event:evId,pax}; switchTab("quote"); };
   $("#rm-enq").onclick=()=>{ closeModal(); openEnquiryForm({room:r.id,event:evId}); };
 }
+function switchTab(t){ CURRENT_TAB=t;
+  document.querySelectorAll("#tabs button").forEach(x=>x.classList.toggle("active",x.dataset.tab===t)); render(); }
 
 /* ============================================================ PACKAGES */
 function renderPackages(v){
@@ -223,7 +257,8 @@ function renderQuote(v){
   // right: summary
   const right=el("div","quote-panel quote-summary");
   right.innerHTML=`<h3>Quote summary</h3><div id="q-summary"></div>
-    <button class="btn block" id="q-pdf" style="margin-top:16px">Download PDF quote</button>
+    <button class="btn block" id="q-brochure" style="margin-top:16px">Download brochure &amp; quote</button>
+    <button class="btn ghost block" id="q-pdf" style="margin-top:8px">Simple quote only</button>
     <button class="btn ghost block" id="q-save" style="margin-top:8px">Save as enquiry</button>`;
   wrap.appendChild(right);
   v.appendChild(wrap);
@@ -247,6 +282,7 @@ function renderQuote(v){
   if(prefill){ $("#q-room").value=prefill.room; $("#q-event").value=prefill.event; $("#q-pax").value=prefill.pax; prefill=null; }
   recalcQuote();
   $("#q-pdf").onclick=downloadQuotePDF;
+  $("#q-brochure").onclick=downloadBrochurePDF;
   $("#q-save").onclick=saveQuoteAsEnquiry;
 }
 
@@ -333,6 +369,93 @@ function downloadQuotePDF(){
   win.document.close();
 }
 
+function downloadBrochurePDF(){
+  const q=gatherQuote();
+  if(!q.customer.name){ alert("Please enter the customer name first."); return; }
+  const et=EVENT_TYPES.find(e=>e.id===q.evId);
+  const lay=bestLayout(q.room,q.evId);
+  const ref="BH-P-"+Date.now().toString(36).toUpperCase();
+  const rows=q.lines.map(l=>`<tr><td>${l.label}</td><td style="text-align:right">${money(l.amt)}</td></tr>`).join("");
+  const pkg=q.pkg;
+  const svg=seatingSVG(q.room,lay,q.pax).replace(/background:#fbfaf7/,'background:#fff');
+  const hero=roomImage(q.room);
+  const gallery=GALLERY.weddings.slice(0,3).map(u=>`<img src="${u}" style="width:32%;height:90px;object-fit:cover;border-radius:6px">`).join("");
+  const win=window.open("","_blank");
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${ref}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+      @page{margin:0}
+      body{font-family:'Inter',Arial,sans-serif;color:#1a2230;font-size:12px;line-height:1.5;margin:0}
+      .page{padding:22mm;page-break-after:always;min-height:257mm}
+      .page:last-child{page-break-after:auto}
+      .cover{background:linear-gradient(160deg,#1a2b47,#101d33);color:#fff;min-height:297mm;padding:0;
+        display:flex;flex-direction:column;justify-content:space-between}
+      .cover-img{height:44%;width:100%;object-fit:cover;opacity:.9}
+      .cover-body{padding:22mm}
+      .cover h1{font-family:'Cormorant Garamond',serif;font-size:46px;font-weight:600;margin:0 0 6px;line-height:1.05}
+      .cover .sub{color:#BB9979;font-size:16px;letter-spacing:1px}
+      .cover .for{margin-top:40px;font-size:14px;color:#c9d1dd}
+      .cover .for b{color:#fff;font-size:22px;font-family:'Cormorant Garamond',serif;display:block}
+      .cover .foot{padding:22mm;font-size:11px;color:#8a97ab}
+      h2{font-family:'Cormorant Garamond',serif;font-size:26px;color:#1a2b47;margin:0 0 4px}
+      .rule{height:2px;background:#BB9979;width:60px;margin:8px 0 18px}
+      .lead{color:#3a4256;font-size:13px;margin-bottom:16px}
+      .grid2{display:flex;gap:6px;margin:12px 0}
+      table{width:100%;border-collapse:collapse;margin-top:8px}
+      td,th{padding:8px 6px;border-bottom:1px solid #e3e7ee;text-align:left}
+      .total td{border-top:2px solid #1a2b47;font-weight:700;font-size:15px;border-bottom:none}
+      .box{background:#f7f8fa;border-radius:10px;padding:16px;margin:14px 0}
+      .inc{columns:2;font-size:12.5px;margin-top:8px}
+      .inc div{margin-bottom:4px}.inc div::before{content:"✓ ";color:#4a7c59;font-weight:700}
+      .carbon{background:#eef5ec;border-radius:8px;padding:12px 16px;color:#4a6147;font-size:12px;margin-top:14px}
+      .stats{display:flex;gap:14px;margin:14px 0}
+      .stats div{flex:1;background:#f7f8fa;border-radius:8px;padding:12px;text-align:center}
+      .stats b{display:block;font-family:'Cormorant Garamond',serif;font-size:22px;color:#1a2b47}
+      .stats span{font-size:11px;color:#7a8494}
+      .foot-note{margin-top:24px;font-size:10px;color:#7a8494;border-top:1px solid #e3e7ee;padding-top:12px}
+    </style></head><body>
+    <!-- COVER -->
+    <div class="cover">
+      <img class="cover-img" src="${hero}" onerror="this.style.display='none'">
+      <div class="cover-body">
+        <div class="sub">BRANDON HALL HOTEL &amp; SPA</div>
+        <h1>${et.label}<br>Proposal</h1>
+        <div class="for">Prepared for<b>${q.customer.name}</b>${q.customer.co?q.customer.co:""}</div>
+      </div>
+      <div class="foot">Ref ${ref} · ${new Date().toLocaleDateString("en-GB")} · Main Street, Brandon, Coventry CV8 3FW · +44 (0)247 710 2555</div>
+    </div>
+
+    <!-- VENUE + ROOM -->
+    <div class="page">
+      <h2>Your event at Brandon Hall</h2><div class="rule"></div>
+      <p class="lead">Set within 17 acres of Warwickshire grounds, Brandon Hall offers elegant spaces for every occasion. Here's our proposal for your ${et.label.toLowerCase()}.</p>
+      <div class="grid2">${gallery}</div>
+      <div class="stats">
+        <div><b>${q.room.name}</b><span>Your room</span></div>
+        <div><b>${q.room.m2} m²</b><span>Floor area</span></div>
+        <div><b>${q.pax}</b><span>Guests</span></div>
+        <div><b>${LAYOUT_LABELS[lay]}</b><span>Layout</span></div>
+      </div>
+      <h2 style="font-size:20px;margin-top:20px">Your room, laid out for ${q.pax} guests</h2><div class="rule"></div>
+      <div style="max-width:480px;margin:0 auto">${svg}</div>
+    </div>
+
+    <!-- PACKAGE + COSTS -->
+    <div class="page">
+      <h2>Your proposal</h2><div class="rule"></div>
+      ${pkg?`<div class="box"><b style="font-family:'Cormorant Garamond',serif;font-size:18px">${pkg.name}</b>
+        <div class="inc">${pkg.includes.map(i=>`<div>${i}</div>`).join("")}</div></div>`:""}
+      <h2 style="font-size:18px;margin-top:18px">Costs</h2><div class="rule"></div>
+      <table>${rows}<tr class="total"><td>Total (inc. VAT where applicable)</td><td style="text-align:right">${money(q.subtotal)}</td></tr></table>
+      <div class="carbon">🌱 Estimated event carbon footprint: <b>${q.carbon.total} kg CO₂e</b> — we're committed to sustainable events.</div>
+      <div class="foot-note">This proposal is valid for 14 days and subject to availability. Prices include VAT at the current rate unless otherwise stated. Rates are non-commissionable. Cancellation terms are per individual contract. Bio-degradable confetti outside only; LED candelabras only (no naked flames).<br><br>
+      To confirm, contact our events team: nicola.cartwright@brandonhallhotelandspa.com · +44 (0)247 710 2555</div>
+    </div>
+    <script>window.onload=()=>setTimeout(()=>window.print(),400)<\/script>
+    </body></html>`);
+  win.document.close();
+}
+
 function saveQuoteAsEnquiry(){
   const q=gatherQuote();
   if(!q.customer.name){ alert("Please enter the customer name first."); return; }
@@ -410,7 +533,10 @@ function openEnquiryDetail(e){
     </div>
     <div class="sec-title">Contact</div>
     <p style="font-size:14px">${e.email||"—"} · ${e.phone||"—"} ${e.company?" · "+e.company:""}</p>
-    ${e.notes?`<div class="sec-title">Notes</div><p style="font-size:14px">${e.notes}</p>`:""}
+    ${(e.budget||e.accommodation||e.date)?`<div class="sec-title">Details</div>
+      <p style="font-size:14px">${e.date?`Date: ${e.date} · `:""}${e.budget?`Budget: ${e.budget} · `:""}${e.accommodation?`Accommodation: ${e.accommodation}`:""}</p>`:""}
+    ${e.notes?`<div class="sec-title">Enquiry brief</div><p style="font-size:14px;line-height:1.6">${e.notes}</p>`:""}
+    <p class="qs-sub" style="margin-top:10px">Source: ${e.source||"manual"}</p>
     <div class="sec-title">Move to stage</div>
     <div class="chips" id="stage-chips">${ENQ_STAGES.map(([s,l])=>`<button class="chip ${e.status===s?"on":""}" data-s="${s}">${l}</button>`).join("")}</div>
     <div class="qs-sub" style="margin-top:14px">Ref ${e.id} · logged ${new Date(e.created).toLocaleString("en-GB")}</div>`;
@@ -442,6 +568,148 @@ function renderAdmin(v){
   v.appendChild(rt);
 }
 
+/* ============================================================ SUPPLIERS */
+function renderSuppliers(v){
+  v.appendChild(head("Supplier Directory","Trusted suppliers for DJs, catering, décor and entertainment. External suppliers must provide PLI and PAT certificates before an event."));
+  const grid=el("div","sup-grid");
+  SUPPLIERS.forEach(s=>{
+    const card=el("div","sup-card"+(s.featured?" feat":""));
+    const pli = s.compliance.pli===true?`<span class="badge-ok">✓ PLI</span>`:s.compliance.pli===false?`<span class="badge-no">✗ PLI</span>`:`<span class="badge-no">PLI —</span>`;
+    const pat = s.compliance.pat===true?`<span class="badge-ok">✓ PAT</span>`:s.compliance.pat===false?`<span class="badge-no">✗ PAT</span>`:`<span class="badge-no">PAT —</span>`;
+    card.innerHTML=`<h3>${s.name}${s.featured?`<span class="feat-tag">PREFERRED</span>`:""}</h3>
+      <div class="cat">${s.category}</div>
+      <div class="blurb">${s.blurb}</div>
+      <div class="svc">${s.services.map(x=>`<span>${x}</span>`).join("")}</div>
+      ${s.pricing.length?`<table class="cap-table" style="margin-bottom:4px">${s.pricing.map(([k,val])=>`<tr><td>${k}</td><td>${val}</td></tr>`).join("")}</table>`:""}
+      <div class="compliance"><b>Compliance:</b> ${pli} ${pat}</div>
+      ${s.contact.note?`<p style="font-size:12.5px;color:var(--muted);margin-top:8px">${s.contact.note}</p>`:""}`;
+    grid.appendChild(card);
+  });
+  v.appendChild(grid);
+}
+
+/* ============================================================ EVENTS CONCIERGE CHAT */
+let BOT={ active:false, steps:[], idx:0, answers:{}, eventType:null };
+function renderChat(v){
+  v.appendChild(head("Events Concierge","A guided chat that captures complete enquiries and drops them into your dashboard. Share the link or embed the button on the hotel website."));
+  const grid=el("div","chat-intro-grid");
+
+  // left: live preview
+  const left=el("div");
+  left.innerHTML=`<div class="sec-title">Live preview</div>`;
+  const frame=el("div","chat-frame"); frame.id="chat-frame";
+  left.appendChild(frame);
+  grid.appendChild(left);
+
+  // right: share + embed
+  const right=el("div");
+  const shareUrl=location.href.split("#")[0]+"#events-chat";
+  const embed=`<a href="${shareUrl}" target="_blank"
+  style="display:inline-flex;align-items:center;gap:8px;background:#1a2b47;color:#fff;
+  padding:13px 24px;border-radius:30px;font:600 15px/1 'Inter',sans-serif;
+  text-decoration:none;box-shadow:0 4px 14px rgba(26,43,71,.3)">
+  💬 Chat to our events specialist</a>`;
+  right.innerHTML=`
+    <div class="sec-title">Shareable link</div>
+    <p style="font-size:14px;margin-bottom:6px">Send this to customers, or use it as the destination for a website button:</p>
+    <div class="embed-box">${shareUrl}<button class="cp" data-copy="${shareUrl}">Copy</button></div>
+
+    <div class="sec-title">Website button (copy &amp; paste)</div>
+    <p style="font-size:14px;margin-bottom:6px">Paste this HTML anywhere on the hotel website to add the button:</p>
+    <div class="embed-box">${embed.replace(/</g,"&lt;")}<button class="cp" data-copy-html>Copy</button></div>
+
+    <div class="sec-title">How it looks</div>
+    <div style="padding:20px;background:var(--paper);border-radius:10px;text-align:center">
+      <a class="btn-preview" href="${shareUrl}" target="_blank" style="text-decoration:none">Chat to our events specialist</a>
+    </div>
+
+    <div class="admin-note" style="margin-top:18px">
+      <b>Guided mode.</b> Runs as a smart branching conversation now — no AI key or cost.
+      Upgrade to the full Claude-powered assistant later via a Firebase function (see README).
+    </div>`;
+  grid.appendChild(right);
+  v.appendChild(grid);
+
+  right.querySelector("[data-copy]")?.addEventListener("click",e=>{
+    navigator.clipboard?.writeText(e.target.dataset.copy); e.target.textContent="Copied"; });
+  right.querySelector("[data-copy-html]")?.addEventListener("click",e=>{
+    navigator.clipboard?.writeText(embed); e.target.textContent="Copied"; });
+
+  startBot(frame);
+}
+
+function startBot(frame){
+  BOT={ active:true, steps:[], idx:0, answers:{}, eventType:null, phase:"start" };
+  frame.innerHTML=`
+    <div class="chat-header"><img src="assets/bh-logo.svg" alt="">
+      <div><div class="ct">Brandon Hall Events</div><div class="cs">Typically replies in minutes</div></div></div>
+    <div class="chat-body" id="chat-body"></div>
+    <div class="chat-opts" id="chat-opts"></div>
+    <div class="chat-input" id="chat-input"><input placeholder="Type your answer…" id="chat-field">
+      <button id="chat-send">→</button></div>`;
+  botSay(BOT_INTRO);
+  BOT.steps=BOT_COMMON_START.slice();
+  setTimeout(()=>askNext(),500);
+  $("#chat-send").onclick=submitChat;
+  $("#chat-field").addEventListener("keydown",e=>{ if(e.key==="Enter")submitChat(); });
+}
+function botSay(text){ const b=$("#chat-body"); if(!b)return;
+  const bub=el("div","bubble bot",text); b.appendChild(bub); b.scrollTop=b.scrollHeight; }
+function userSay(text){ const b=$("#chat-body"); if(!b)return;
+  const bub=el("div","bubble user",text); b.appendChild(bub); b.scrollTop=b.scrollHeight; }
+function askNext(){
+  const opts=$("#chat-opts"); opts.innerHTML="";
+  if(BOT.idx>=BOT.steps.length){ finishBot(); return; }
+  const step=BOT.steps[BOT.idx];
+  botSay(step.q);
+  if(step.type==="choice"){
+    $("#chat-input").style.display="none";
+    step.options.forEach(([val,label])=>{ const b=el("button",null,label);
+      b.onclick=()=>answerStep(step,val,label); opts.appendChild(b); });
+    if(step.optional){ const sk=el("button",null,"Skip"); sk.onclick=()=>answerStep(step,"","(skipped)"); opts.appendChild(sk); }
+  } else {
+    $("#chat-input").style.display="flex";
+    $("#chat-field").value=""; $("#chat-field").focus();
+    if(step.optional){ const sk=el("button",null,"Skip"); sk.onclick=()=>answerStep(step,"","(skipped)"); opts.appendChild(sk); }
+  }
+}
+function submitChat(){ const f=$("#chat-field"); const val=f.value.trim();
+  const step=BOT.steps[BOT.idx]; if(!val && !step.optional)return; answerStep(step,val,val||"(skipped)"); }
+function answerStep(step,val,label){
+  userSay(label);
+  BOT.answers[step.key]=val;
+  // branch after event type
+  if(step.key==="eventType"){
+    BOT.eventType=val;
+    BOT.steps = [...BOT_COMMON_START, ...botFlowFor(val), ...BOT_CONTACT];
+  }
+  BOT.idx++;
+  setTimeout(askNext,350);
+}
+function finishBot(){
+  $("#chat-opts").innerHTML=""; $("#chat-input").style.display="none";
+  botSay("Perfect — thank you! I've passed everything to our events team and they'll be in touch very soon. 🎉");
+  const a=BOT.answers;
+  // map to enquiry record
+  const paxGuess = a.pax || a.paxDay || (a.paxEve? a.paxEve : null);
+  Store.add({
+    name:a.name||"(via chat)", email:a.email||"", phone:a.phone||"",
+    event:a.eventType||"other",
+    date:a.date||"", pax: paxGuess? parseInt(paxGuess)||paxGuess : null,
+    room:"", source:"events chat",
+    budget:a.budget||"", accommodation:a.accommodation||"",
+    notes:[ a.eventName?`Event: ${a.eventName}`:"", a.days?`Days: ${a.days}`:"",
+      a.layout?`Layout: ${a.layout}`:"", a.av?`AV: ${a.av}`:"",
+      a.catering?`Catering: ${a.catering}`:"", a.style?`Style: ${a.style}`:"",
+      a.dateFlex?`Date ${a.dateFlex}`:"", a.paxEve?`Evening guests: ${a.paxEve}`:"",
+      a.extras?`Extras: ${a.extras}`:"", a.agent?`Agent/company: ${a.agent}`:"",
+      a.notes?`Notes: ${a.notes}`:"" ].filter(Boolean).join(" · ")
+  });
+  const opts=$("#chat-opts");
+  const again=el("button",null,"Start another enquiry"); again.onclick=()=>startBot($("#chat-frame"));
+  opts.appendChild(again);
+}
+
 /* ============================================================ HELPERS */
 function head(title,sub){ const h=el("div","page-head"); h.innerHTML=`<h2>${title}</h2>${sub?`<p>${sub}</p>`:""}`; return h; }
 function showModal(title,sub,bodyHTML){
@@ -455,5 +723,21 @@ function showModal(title,sub,bodyHTML){
 }
 function closeModal(){ $("#modal-root").innerHTML=""; }
 
-/* public enquiry deep-link (#enquire) — opens form pre-login later; for now requires login */
-if(location.hash==="#enquire"){ /* handled after login in future */ }
+/* ============================================================ PUBLIC CHAT PAGE
+   The shareable link (#events-chat) opens the concierge WITHOUT login,
+   so customers can use it straight from the hotel website. */
+function openPublicChat(){
+  $("#login").classList.add("hidden");
+  $("#app").classList.remove("hidden");
+  document.querySelector(".topbar").style.display="none";
+  document.querySelector("nav.tabs").style.display="none";
+  const v=$("#view"); v.innerHTML="";
+  v.style.maxWidth="480px";
+  const wrap=el("div"); wrap.style.cssText="padding-top:10px";
+  wrap.innerHTML=`<div style="text-align:center;margin-bottom:14px">
+    <img src="assets/bh-logo.svg" style="width:90px" alt="Brandon Hall"></div>`;
+  const frame=el("div","chat-frame"); frame.id="chat-frame"; frame.style.margin="0 auto";
+  wrap.appendChild(frame); v.appendChild(wrap);
+  startBot(frame);
+}
+if(location.hash==="#events-chat"){ window.addEventListener("DOMContentLoaded",openPublicChat); openPublicChat(); }

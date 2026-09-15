@@ -166,3 +166,142 @@ function carbonModel(room, eventTypeId, pax) {
     perHead: perHead
   };
 }
+
+/* ============================================================
+   PHASE 2 ADDITIONS — images, tech, suppliers, layouts, bot
+   ============================================================ */
+
+/* ---- ROOM & GALLERY IMAGES (linked live from hotel site) ----
+   These load in a normal browser from the hotel's own server.
+   To store locally instead, download and change paths to assets/. */
+const IMG = "https://www.brandonhallhotelandspa.com/wp-content/uploads";
+const GALLERY = {
+  meetings: [
+    IMG+"/2025/09/1758893100-1000x667.png",
+    IMG+"/2025/09/1758893782-1000x757.png",
+    IMG+"/2025/09/1758893922-1000x757.png",
+    IMG+"/2025/09/brandon-hall-hotel-spa-warwickshire-brandon-warwickshire-pic-4-1000x750.jpeg",
+    IMG+"/2025/09/brandon-hall-hotel-spa-warwickshire-brandon-warwickshire-pic-9-1000x750.jpeg",
+    IMG+"/2025/09/brandon-hall-hotel-spa-warwickshire-brandon-warwickshire-pic-5.jpeg"
+  ],
+  weddings: [
+    IMG+"/2025/10/d5bbd9f93d2a64416f70d2749fa4d333.jpg",
+    IMG+"/2025/10/cfe352cb08f87468ed316d803dc8c01f.jpg",
+    IMG+"/2025/10/5c5ab5645d3775aa1599055058995442.jpg",
+    IMG+"/2025/10/90ef2b092a6f8ef4d5fc2eae8c650bf7.jpg",
+    IMG+"/2025/10/7c97647c255b50400681756be21e32f8.jpg"
+  ]
+};
+/* Per-room hero: default to a meetings image; edit to assign specific shots */
+function roomImage(room){
+  const idx = Math.abs([...room.id].reduce((a,c)=>a+c.charCodeAt(0),0)) % GALLERY.meetings.length;
+  return GALLERY.meetings[idx];
+}
+
+/* ---- TECH / CONNECTIVITY PER ROOM ----
+   DUMMY defaults — overwrite from M&E audit. Structure is final.
+   Each room inherits defaults unless overridden in ROOM_TECH[room.id]. */
+const TECH_DEFAULT = {
+  screen:"Wall-mounted TV or drop-down projector screen",
+  hdmi:true, wirelessShare:true, videoCall:true, laptopConnect:true,
+  pa:false, microphones:false, wifi:true, flipchart:true,
+  hearingLoop:false, blackout:true, naturalLight:true, notes:""
+};
+const ROOM_TECH = {
+  // Examples of overrides — replace all from audit:
+  "woodlands":   { pa:true, microphones:true, notes:"Full PA, staging available, dancefloor" },
+  "woodlands-1": { pa:true, microphones:true },
+  "woodlands-2": { pa:true, microphones:true },
+  "brandon-suite":{ pa:true, microphones:true },
+  "wolston-suite":{ pa:true }
+};
+function roomTech(room){ return Object.assign({}, TECH_DEFAULT, ROOM_TECH[room.id]||{}); }
+
+const TECH_FIELDS = [
+  ["screen","Screen / display"], ["hdmi","HDMI input"],
+  ["wirelessShare","Wireless screen share"], ["videoCall","Video-call capable (Teams/Zoom)"],
+  ["laptopConnect","Laptop connection"], ["pa","PA system"],
+  ["microphones","Microphones"], ["wifi","Complimentary WiFi"],
+  ["flipchart","Flipchart & pens"], ["hearingLoop","Hearing loop"],
+  ["blackout","Blackout blinds"], ["naturalLight","Natural light"]
+];
+
+/* ---- SUPPLIER FACT SHEETS ---- */
+const SUPPLIERS = [
+  { id:"sound-kicks", name:"Sound Kicks", category:"DJ / AV / Live Events", featured:true,
+    services:["DJ services","PA & sound hire","Live event production","Staging & lighting"],
+    pricing:[["DJ (evening)","£385 + VAT"],["Speakers","£80"]],
+    contact:{ note:"Book via hotel events team — confirmed on request" },
+    compliance:{ pli:true, pat:true }, verified:true,
+    blurb:"Preferred DJ and AV supplier for Brandon Hall. Handles DJ sets, PA hire and full live-event production including staging and lighting." },
+  { id:"caterer-placeholder", name:"External Caterer (placeholder)", category:"Catering", featured:false,
+    services:["To be added"], pricing:[], contact:{ note:"Add supplier details" },
+    compliance:{ pli:null, pat:null }, verified:false,
+    blurb:"Placeholder. External caterers must provide insurance, food hygiene certificates, PAT testing, food-handler training, menu, alcohol licence, and set-up/clean-up plan (per event FAQs)." },
+  { id:"decorator-placeholder", name:"Decorator / Stylist (placeholder)", category:"Décor & Styling", featured:false,
+    services:["To be added"], pricing:[], contact:{ note:"Add supplier details" },
+    compliance:{ pli:null, pat:null }, verified:false,
+    blurb:"Placeholder for chair covers, linen, centrepieces and styling. Note: LED candelabras only — no naked flames. Biodegradable confetti outside only." },
+  { id:"entertainment-placeholder", name:"Entertainment (placeholder)", category:"Entertainment", featured:false,
+    services:["Bands, performers — to be added"], pricing:[], contact:{ note:"Add supplier details" },
+    compliance:{ pli:null, pat:null }, verified:false,
+    blurb:"Placeholder for bands and performers (e.g. Oompah band, jazz band, Tread the Boards). External acts need PLI and PAT certificates." },
+  { id:"florist-placeholder", name:"Florist (placeholder)", category:"Florals", featured:false,
+    services:["To be added"], pricing:[], contact:{ note:"Add supplier details" },
+    compliance:{ pli:null, pat:null }, verified:false, blurb:"Placeholder for floral arrangements and installations." }
+];
+
+/* ---- EVENTS CONCIERGE — adaptive question flows ----
+   Modelled on real enquiries (arrangeMY BOT, Hitched, website leads).
+   Each step: key, question, type, and optional options/branch. */
+const BOT_INTRO = "Hello! I'm the Brandon Hall events assistant. I'll ask a few quick questions so our team can prepare exactly the right proposal for you. It only takes a minute.";
+
+const BOT_COMMON_START = [
+  { key:"eventType", q:"What kind of event are you planning?", type:"choice",
+    options:[["wedding","💍 Wedding"],["meeting","📊 Meeting / Conference"],["birthday","🎂 Birthday / Celebration"],
+      ["baby-shower","🍼 Baby Shower"],["funeral","🕊️ Celebration of Life"],["christmas","🎄 Christmas / NYE"],["other","Something else"]] }
+];
+const BOT_FLOWS = {
+  meeting: [
+    { key:"eventName", q:"What's the name of the meeting or event? (optional)", type:"text", optional:true },
+    { key:"date", q:"What date(s) are you looking at?", type:"text" },
+    { key:"days", q:"How many days?", type:"number" },
+    { key:"pax", q:"Roughly how many delegates?", type:"number" },
+    { key:"layout", q:"Preferred room layout?", type:"choice",
+      options:[["boardroom","Boardroom"],["ushape","U-shape / Horseshoe"],["theatre","Theatre"],["cabaret","Cabaret"],["unsure","Not sure yet"]] },
+    { key:"av", q:"What AV do you need? (e.g. screen share, video calls, projector, flipchart)", type:"text" },
+    { key:"catering", q:"Any catering needs? (arrival tea/coffee, lunch, dinner)", type:"text" },
+    { key:"accommodation", q:"Do you need overnight accommodation?", type:"choice", options:[["yes","Yes"],["no","No"]] },
+    { key:"budget", q:"Do you have a budget per delegate or day-delegate rate in mind? (optional)", type:"text", optional:true },
+    { key:"agent", q:"Are you booking on behalf of a company or as an agent? (optional)", type:"text", optional:true }
+  ],
+  wedding: [
+    { key:"date", q:"When are you hoping to celebrate? (a date or rough timeframe is fine)", type:"text" },
+    { key:"dateFlex", q:"Is that date fixed or flexible?", type:"choice", options:[["fixed","Fixed"],["flexible","Flexible"]] },
+    { key:"paxDay", q:"Roughly how many day guests?", type:"number" },
+    { key:"paxEve", q:"And how many evening guests? (optional)", type:"number", optional:true },
+    { key:"accommodation", q:"Will you need overnight accommodation for guests?", type:"choice", options:[["yes","Yes"],["no","No"],["maybe","Not sure"]] },
+    { key:"catering", q:"Any thoughts on catering or menu style yet? (optional)", type:"text", optional:true },
+    { key:"budget", q:"Do you have a budget in mind? (optional)", type:"text", optional:true },
+    { key:"extras", q:"Anything special on your wishlist? (drinks reception, entertainment, décor)", type:"text", optional:true }
+  ],
+  social: [ // birthday, baby-shower, funeral, christmas, other
+    { key:"date", q:"What date are you considering?", type:"text" },
+    { key:"pax", q:"Roughly how many guests?", type:"number" },
+    { key:"style", q:"What are you picturing? (sit-down meal, buffet, drinks & canapés…)", type:"text" },
+    { key:"accommodation", q:"Do you need overnight rooms?", type:"choice", options:[["yes","Yes"],["no","No"],["maybe","Not sure"]] },
+    { key:"budget", q:"Any budget in mind? (optional)", type:"text", optional:true },
+    { key:"extras", q:"Any extras you'd like? (DJ, décor, entertainment)", type:"text", optional:true }
+  ]
+};
+const BOT_CONTACT = [
+  { key:"name", q:"Lovely — almost done. What's your name?", type:"text" },
+  { key:"email", q:"Best email to reach you?", type:"text" },
+  { key:"phone", q:"And a phone number?", type:"text" },
+  { key:"notes", q:"Anything else you'd like the team to know? (optional)", type:"text", optional:true }
+];
+function botFlowFor(eventType){
+  if(eventType==="meeting") return BOT_FLOWS.meeting;
+  if(eventType==="wedding") return BOT_FLOWS.wedding;
+  return BOT_FLOWS.social;
+}
