@@ -29,28 +29,18 @@ const Store = {
     e.created=new Date().toISOString(); e.status=e.status||"new"; l.unshift(e); this.save(l); return e; },
   update(id,patch){ const l=this.all(); const i=l.findIndex(x=>x.id===id);
     if(i>-1){ Object.assign(l[i],patch); this.save(l);} },
-  seed(){ if(localStorage.getItem("bh_seeded"))return;
-    const samples=[
-      { name:"Dairy Carbon Network", company:"via arrangeMY", email:"maria.hamblin@arrangemy.com", phone:"01905 610016",
-        event:"meeting", date:"18 Nov 2026", pax:7, room:"", source:"agent (arrangeMY)", status:"new",
-        budget:"£40–45 DDR", accommodation:"yes",
-        notes:"2-day team meeting · Layout: Horseshoe · AV: TV/projector, laptop share, Teams call, flipchart, water · Dinner 7 delegates · DBB overnight · 12% commission" },
-      { name:"Andre Brissett", email:"brissett44@outlook.com", phone:"+447355574227",
-        event:"wedding", date:"23 Nov 2026", pax:75, room:"", source:"Hitched", status:"new",
-        notes:"Country wedding, West Midlands · 60–90 guests · Requested packages info" },
-      { name:"Dominic Hillyard", email:"dominic_hillyard@outlook.com", phone:"07534325007",
-        event:"wedding", date:"Aug 2027", pax:55, room:"brandon-suite", source:"website", status:"contacted",
-        accommodation:"yes", notes:"All-in-one ceremony + reception + party · ~50 day & evening · ~10 rooms · Proposal sent, viewing offered" },
-      { name:"Rebekah Stretton", email:"rebekah.stretton@gmail.com", phone:"07505174898",
-        event:"wedding", date:"29 Mar 2026", pax:50, room:"", source:"website", status:"new",
-        accommodation:"yes" },
-      { name:"Samantha Courtnell", email:"samcourtnell@outlook.com", phone:"07870672918",
-        event:"wedding", date:"2027 (TBC)", pax:90, room:"", source:"website", status:"new",
-        accommodation:"yes", notes:"Wants spaces, prices, sample menus" }
-    ];
-    const l=this.all(); samples.forEach(s=>{ s.id="ENQ-"+Math.random().toString(36).slice(2,8).toUpperCase();
-      s.created=new Date(Date.now()-Math.random()*20*864e5).toISOString(); l.push(s); });
-    this.save(l); localStorage.setItem("bh_seeded","1");
+  seed(){
+    // migrate any old-status enquiries to the new stage model
+    const oldMap={ new:"enquiry", contacted:"provisional", quoted:"provisional", won:"confirmed", lost:"cancelled" };
+    let l=this.all(), changed=false;
+    l.forEach(e=>{ if(oldMap[e.status]){ e.status=oldMap[e.status]; changed=true; }
+      if(!e.owner){ e.owner=ENQ_OWNERS[0]; changed=true; } });
+    if(changed) this.save(l);
+    if(localStorage.getItem("bh_seeded_v2"))return;
+    const samples=(typeof SEED_SAMPLES!=="undefined")?SEED_SAMPLES:[];
+    samples.forEach(s=>{ const item=Object.assign({},s); item.id="ENQ-"+Math.random().toString(36).slice(2,8).toUpperCase();
+      item.created=new Date(Date.now()-Math.random()*20*864e5).toISOString(); l.push(item); });
+    this.save(l); localStorage.setItem("bh_seeded_v2","1");
   }
 };
 
@@ -97,20 +87,23 @@ const DB = {
 
 const SEED_SAMPLES=[
   { name:"Dairy Carbon Network", company:"via arrangeMY", email:"maria.hamblin@arrangemy.com", phone:"01905 610016",
-    event:"meeting", date:"18 Nov 2026", pax:7, room:"", source:"agent (arrangeMY)", status:"new",
-    budget:"£40–45 DDR", accommodation:"yes",
+    event:"meeting", date:"2026-11-18", pax:7, room:"", source:"arrangeMY / agent", status:"enquiry",
+    owner:"Nicola Cartwright", value:1200, followUp:"2026-09-16", budget:"£40–45 DDR", accommodation:"yes",
     notes:"2-day team meeting · Layout: Horseshoe · AV: TV/projector, laptop share, Teams call, flipchart, water · Dinner 7 delegates · DBB overnight · 12% commission" },
   { name:"Andre Brissett", email:"brissett44@outlook.com", phone:"+447355574227",
-    event:"wedding", date:"23 Nov 2026", pax:75, room:"", source:"Hitched", status:"new",
+    event:"wedding", date:"2026-11-23", pax:75, room:"", source:"Hitched", status:"enquiry",
+    owner:"Natalie Freeman", value:0, followUp:"2026-09-16",
     notes:"Country wedding, West Midlands · 60–90 guests · Requested packages info" },
   { name:"Dominic Hillyard", email:"dominic_hillyard@outlook.com", phone:"07534325007",
-    event:"wedding", date:"Aug 2027", pax:55, room:"brandon-suite", source:"website", status:"contacted",
-    accommodation:"yes", notes:"All-in-one ceremony + reception + party · ~50 day & evening · ~10 rooms · Proposal sent, viewing offered" },
+    event:"wedding", date:"2027-08-01", pax:55, room:"brandon-suite", source:"Website", status:"provisional",
+    owner:"Natalie Freeman", value:8500, followUp:"2026-09-20", accommodation:"yes",
+    notes:"All-in-one ceremony + reception + party · ~50 day & evening · ~10 rooms · Proposal sent, viewing offered" },
   { name:"Rebekah Stretton", email:"rebekah.stretton@gmail.com", phone:"07505174898",
-    event:"wedding", date:"29 Mar 2026", pax:50, room:"", source:"website", status:"new", accommodation:"yes" },
+    event:"wedding", date:"2026-03-29", pax:50, room:"", source:"Website", status:"enquiry",
+    owner:"Natalie Freeman", value:0, accommodation:"yes" },
   { name:"Samantha Courtnell", email:"samcourtnell@outlook.com", phone:"07870672918",
-    event:"wedding", date:"2027 (TBC)", pax:90, room:"", source:"website", status:"new",
-    accommodation:"yes", notes:"Wants spaces, prices, sample menus" }
+    event:"wedding", date:"2027-06-01", pax:90, room:"", source:"Website", status:"enquiry",
+    owner:"Nicola Cartwright", value:0, accommodation:"yes", notes:"Wants spaces, prices, sample menus" }
 ];
 
 async function boot(){
@@ -130,7 +123,7 @@ async function boot(){
 }
 function render(){
   const v=$("#view"); v.innerHTML="";
-  ({rooms:renderRooms, packages:renderPackages, suppliers:renderSuppliers, quote:renderQuote,
+  ({rooms:renderRooms, dashboard:renderDashboard, packages:renderPackages, suppliers:renderSuppliers, quote:renderQuote,
     profit:renderProfit, enquiries:renderEnquiries, chat:renderChat, admin:renderAdmin }[CURRENT_TAB]||renderRooms)(v);
 }
 
@@ -396,18 +389,24 @@ function renderRoomLines(){
   const box=$("#q-roomlines"); if(!box)return;
   box.innerHTML="";
   QUOTE_ROOMS.forEach((line,i)=>{
+    const room=ROOMS.find(r=>r.id===line.room);
+    const tech=room?roomTech(room):{};
     const card=el("div","room-line");
     card.innerHTML=`
       <div class="rl-head"><span class="rl-num">Room ${i+1}</span>
         ${QUOTE_ROOMS.length>1?`<button class="rl-del" data-i="${i}" title="Remove">×</button>`:""}</div>
-      <div class="rl-grid">
-        <div><label>Room / space</label><select data-i="${i}" data-f="room">${ROOMS.map(r=>`<option value="${r.id}" ${r.id===line.room?"selected":""}>${r.name} (${r.m2}m²)</option>`).join("")}</select></div>
-        <div><label>Date / day</label><input type="date" data-i="${i}" data-f="date" value="${line.date}"></div>
-        <div><label>Layout</label><select data-i="${i}" data-f="layout">${Object.entries(LAYOUT_LABELS).map(([k,l])=>`<option value="${k}" ${k===line.layout?"selected":""}>${l}</option>`).join("")}</select></div>
-        <div><label>Guests</label><input type="number" min="1" data-i="${i}" data-f="pax" value="${line.pax}"></div>
-        <div><label>Hire basis</label><select data-i="${i}" data-f="hire"><option value="full" ${line.hire==="full"?"selected":""}>Full day</option><option value="half" ${line.hire==="half"?"selected":""}>Half day</option><option value="none" ${line.hire==="none"?"selected":""}>None (incl.)</option></select></div>
-        <div><label>Package</label><select data-i="${i}" data-f="pkg"><option value="">Room hire only</option>${PACKAGES.map(p=>`<option value="${p.id}" ${p.id===line.pkg?"selected":""}>${p.name} (${money(p.from)}pp)</option>`).join("")}</select></div>
-      </div>`;
+      <div class="rl-body">
+        <img class="rl-img" src="${room?roomImage(room):""}" alt="${room?room.name:""}" loading="lazy" onerror="this.style.display='none'">
+        <div class="rl-grid">
+          <div><label>Room / space</label><select data-i="${i}" data-f="room">${ROOMS.map(r=>`<option value="${r.id}" ${r.id===line.room?"selected":""}>${r.name} (${r.m2}m²)</option>`).join("")}</select></div>
+          <div><label>Date / day</label><input type="date" data-i="${i}" data-f="date" value="${line.date}"></div>
+          <div><label>Layout</label><select data-i="${i}" data-f="layout">${Object.entries(LAYOUT_LABELS).map(([k,l])=>`<option value="${k}" ${k===line.layout?"selected":""}>${l}</option>`).join("")}</select></div>
+          <div><label>Guests</label><input type="number" min="1" data-i="${i}" data-f="pax" value="${line.pax}"></div>
+          <div><label>Hire basis</label><select data-i="${i}" data-f="hire"><option value="full" ${line.hire==="full"?"selected":""}>Full day</option><option value="half" ${line.hire==="half"?"selected":""}>Half day</option><option value="none" ${line.hire==="none"?"selected":""}>None (incl.)</option></select></div>
+          <div><label>Package</label><select data-i="${i}" data-f="pkg"><option value="">Room hire only</option>${PACKAGES.map(p=>`<option value="${p.id}" ${p.id===line.pkg?"selected":""}>${p.name} (${money(p.from)}pp)</option>`).join("")}</select></div>
+        </div>
+      </div>
+      ${room?`<div class="rl-spec">${room.m2} m²${room.length?` · ${room.length}×${room.width}m`:""} · max ${maxCap(room)} · ${tech.screen||"Screen"}${tech.wirelessShare?" · ClickShare":""}${tech.videoCall?" · Video-call ready":""}</div>`:""}`;
     box.appendChild(card);
   });
   box.querySelectorAll("[data-f]").forEach(inp=>inp.addEventListener("input",e=>{
@@ -621,9 +620,11 @@ function saveQuoteAsEnquiry(){
 }
 
 /* ============================================================ ENQUIRIES */
-const ENQ_STAGES=[["new","New"],["contacted","Contacted"],["quoted","Quoted"],["won","Won"],["lost","Lost"]];
+const ENQ_STAGES=[["enquiry","Enquiry"],["provisional","Provisional"],["confirmed","Confirmed"],["cancelled","Cancelled"]];
+const ENQ_OWNERS=["Nicola Cartwright","Natalie Freeman","Ajay Kawa","Raj Kumar","Alia Taub"];
+const ENQ_SOURCES=["Website","Events chat","Hitched","arrangeMY / agent","Phone","Email","Walk-in","Referral","Other"];
 function renderEnquiries(v){
-  v.appendChild(head("Enquiry Dashboard","Track every enquiry across all channels — website, agents, chat and manual — through to won or lost."));
+  v.appendChild(head("Enquiry Dashboard","Manage every enquiry across all channels — website, chat, agents and manual — from first enquiry to confirmed or cancelled."));
   const tb=el("div","enq-toolbar");
   tb.innerHTML=`<button class="btn" id="enq-new">+ New enquiry</button>
     <button class="btn ghost" id="enq-chat">Open events chat</button>
@@ -637,20 +638,23 @@ function renderEnquiries(v){
   const list=DB.all();
 
   // ---- dashboard stat cards ----
-  const now=new Date(), monthAgo=new Date(now-30*864e5);
-  const openCount=list.filter(e=>!["won","lost"].includes(e.status)).length;
-  const wonCount=list.filter(e=>e.status==="won").length;
+  const today=new Date().toISOString().slice(0,10);
+  const monthAgo=new Date(Date.now()-30*864e5);
+  const openCount=list.filter(e=>["enquiry","provisional"].includes(e.status)).length;
+  const confirmedCount=list.filter(e=>e.status==="confirmed").length;
   const newThisMonth=list.filter(e=>new Date(e.created)>=monthAgo).length;
-  const pipelineVal=list.filter(e=>!["lost"].includes(e.status)).reduce((s,e)=>s+(e.value||0),0);
-  const conv = list.length? Math.round(wonCount/list.length*100):0;
+  const pipelineVal=list.filter(e=>["enquiry","provisional"].includes(e.status)).reduce((s,e)=>s+(e.value||0),0);
+  const confirmedVal=list.filter(e=>e.status==="confirmed").reduce((s,e)=>s+(e.value||0),0);
+  const overdue=list.filter(e=>e.followUp && e.followUp<today && ["enquiry","provisional"].includes(e.status)).length;
+  const conv = list.length? Math.round(confirmedCount/list.length*100):0;
   const stats=el("div","stat-cards");
   stats.innerHTML=`
     <div class="stat-card"><div class="sc-v">${list.length}</div><div class="sc-k">Total enquiries</div></div>
-    <div class="stat-card"><div class="sc-v">${openCount}</div><div class="sc-k">Open / in progress</div></div>
-    <div class="stat-card"><div class="sc-v">${newThisMonth}</div><div class="sc-k">New this month</div></div>
-    <div class="stat-card"><div class="sc-v">${wonCount}</div><div class="sc-k">Won</div></div>
-    <div class="stat-card accent"><div class="sc-v">${money(pipelineVal)}</div><div class="sc-k">Pipeline value</div></div>
-    <div class="stat-card"><div class="sc-v">${conv}%</div><div class="sc-k">Conversion</div></div>`;
+    <div class="stat-card"><div class="sc-v">${openCount}</div><div class="sc-k">Open (enquiry + provisional)</div></div>
+    <div class="stat-card accent"><div class="sc-v">${money(pipelineVal)}</div><div class="sc-k">Open pipeline value</div></div>
+    <div class="stat-card"><div class="sc-v">${confirmedCount}</div><div class="sc-k">Confirmed</div></div>
+    <div class="stat-card"><div class="sc-v">${money(confirmedVal)}</div><div class="sc-k">Confirmed value</div></div>
+    <div class="stat-card"><div class="sc-v" style="${overdue?'color:#b3261e':''}">${overdue}</div><div class="sc-k">Follow-ups overdue</div></div>`;
   v.appendChild(stats);
 
   if(!list.length){ v.appendChild(el("div","empty",`<div class="big">No enquiries yet</div>
@@ -667,15 +671,24 @@ function renderEnquiries(v){
   const cols=el("div","enq-cols");
   ENQ_STAGES.forEach(([sid,slabel])=>{
     const items=list.filter(e=>e.status===sid);
+    const stageVal=items.reduce((s,e)=>s+(e.value||0),0);
     const col=el("div","enq-col");
-    col.innerHTML=`<h4>${slabel} <span>${items.length}</span></h4>`;
+    col.innerHTML=`<h4>${slabel} <span>${items.length}</span></h4>
+      ${stageVal?`<div class="col-value">${money(stageVal)}</div>`:""}`;
     items.forEach(e=>{
       const room=ROOMS.find(r=>r.id===e.room);
       const et=EVENT_TYPES.find(t=>t.id===e.event);
+      const fmtDate=d=>d?(/^\d{4}-\d{2}-\d{2}/.test(d)?new Date(d).toLocaleDateString("en-GB"):d):"";
+      const overdue = e.followUp && e.followUp<today && !["confirmed","cancelled"].includes(e.status);
+      const initials = e.owner? e.owner.split(" ").map(w=>w[0]).join("") : "";
       const card=el("div","enq-card");
-      card.innerHTML=`<div class="nm">${e.name}</div>
-        <div class="meta">${et?et.icon+" "+et.label:"—"} · ${e.pax||"?"} guests${e.date?" · "+e.date:""}</div>
-        <div class="tags">${room?`<span class="tag">${room.name}</span>`:""}${e.value?`<span class="tag">${money(e.value)}</span>`:""}${e.budget?`<span class="tag">${e.budget}</span>`:""}${e.costing?`<span class="tag profit">${money(Math.round(e.costing.profit))} profit</span>`:""}<span class="tag src">${e.source||"manual"}</span></div>`;
+      card.innerHTML=`<div class="ec-top">
+          <div class="nm">${e.name}</div>
+          ${e.owner?`<span class="owner-badge" title="${e.owner}">${initials}</span>`:""}
+        </div>
+        <div class="meta">${et?et.icon+" "+et.label:"—"} · ${e.pax||"?"} guests${e.date?" · "+fmtDate(e.date):""}</div>
+        <div class="tags">${e.value?`<span class="tag val">${money(e.value)}</span>`:""}${room?`<span class="tag">${room.name}</span>`:""}${e.costing?`<span class="tag profit">${money(Math.round(e.costing.profit))} profit</span>`:""}<span class="tag src">${e.source||"manual"}</span></div>
+        ${e.followUp?`<div class="followup ${overdue?"overdue":""}">${overdue?"⚠ ":"📅 "}Follow up ${fmtDate(e.followUp)}</div>`:""}`;
       card.onclick=()=>openEnquiryDetail(e);
       col.appendChild(card);
     });
@@ -684,41 +697,61 @@ function renderEnquiries(v){
   v.appendChild(cols);
 }
 function openEnquiryForm(pre){
+  const today=new Date().toISOString().slice(0,10);
   const body=`<div class="form-grid">
     <div><label>Name *</label><input id="e-name" placeholder="Customer name"></div>
     <div><label>Company</label><input id="e-co"></div>
     <div><label>Email</label><input id="e-email" type="email"></div>
     <div><label>Phone</label><input id="e-phone"></div>
     <div><label>Event type</label><select id="e-event">${EVENT_TYPES.map(t=>`<option value="${t.id}" ${pre.event===t.id?"selected":""}>${t.label}</option>`).join("")}</select></div>
-    <div><label>Preferred date</label><input id="e-date" type="date"></div>
+    <div><label>Event date</label><input id="e-date" type="date"></div>
     <div><label>Room of interest</label><select id="e-room"><option value="">Any / unsure</option>${ROOMS.map(r=>`<option value="${r.id}" ${pre.room===r.id?"selected":""}>${r.name}</option>`).join("")}</select></div>
     <div><label>Guests</label><input id="e-pax" type="number" min="1"></div>
+    <div><label>Owner</label><select id="e-owner">${ENQ_OWNERS.map(o=>`<option ${SESSION&&SESSION.name===o?"selected":""}>${o}</option>`).join("")}</select></div>
+    <div><label>Stage</label><select id="e-stage">${ENQ_STAGES.map(([s,l])=>`<option value="${s}">${l}</option>`).join("")}</select></div>
+    <div><label>Estimated value (£)</label><input id="e-value" type="number" min="0" placeholder="0"></div>
+    <div><label>Source</label><select id="e-source">${ENQ_SOURCES.map(s=>`<option>${s}</option>`).join("")}</select></div>
+    <div><label>Follow-up date</label><input id="e-followup" type="date" value="${today}"></div>
+    <div></div>
     <div class="full"><label>Notes</label><textarea id="e-notes" rows="3" placeholder="Requirements, budget, questions…"></textarea></div>
   </div>
   <div style="margin-top:18px"><button class="btn" id="e-submit">Save enquiry</button></div>`;
-  showModal("New enquiry","Capture a customer enquiry",body);
+  showModal("New enquiry","Capture and manage a customer enquiry",body);
   $("#e-submit").onclick=()=>{
     const name=$("#e-name").value.trim();
     if(!name){ $("#e-name").focus(); return; }
     DB.add({ name, company:$("#e-co").value, email:$("#e-email").value, phone:$("#e-phone").value,
       event:$("#e-event").value, date:$("#e-date").value, room:$("#e-room").value,
-      pax:parseInt($("#e-pax").value)||null, notes:$("#e-notes").value, source:"manual" });
+      pax:parseInt($("#e-pax").value)||null, owner:$("#e-owner").value, status:$("#e-stage").value,
+      value:parseFloat($("#e-value").value)||0, source:$("#e-source").value, followUp:$("#e-followup").value,
+      notes:$("#e-notes").value });
     closeModal(); render();
   };
 }
 function openEnquiryDetail(e){
   const room=ROOMS.find(r=>r.id===e.room); const et=EVENT_TYPES.find(t=>t.id===e.event);
+  const fmtDate=d=>d?(/^\d{4}-\d{2}-\d{2}/.test(d)?new Date(d).toLocaleDateString("en-GB"):d):"—";
   const body=`<div class="detail-row">
       <div class="stat"><div class="k">Event</div><div class="v" style="font-size:16px">${et?et.label:"—"}</div></div>
       <div class="stat"><div class="k">Guests</div><div class="v">${e.pax||"—"}</div></div>
-      <div class="stat"><div class="k">Room</div><div class="v" style="font-size:16px">${room?room.name:"Any"}</div></div>
+      <div class="stat"><div class="k">Value</div><div class="v">${e.value?money(e.value):"—"}</div></div>
     </div>
+
+    <div class="sec-title">Manage</div>
+    <div class="manage-grid">
+      <div><label>Owner</label><select id="m-owner">${ENQ_OWNERS.map(o=>`<option ${e.owner===o?"selected":""}>${o}</option>`).join("")}</select></div>
+      <div><label>Stage</label><select id="m-stage">${ENQ_STAGES.map(([s,l])=>`<option value="${s}" ${e.status===s?"selected":""}>${l}</option>`).join("")}</select></div>
+      <div><label>Value (£)</label><input id="m-value" type="number" min="0" value="${e.value||0}"></div>
+      <div><label>Event date</label><input id="m-date" type="date" value="${/^\d{4}-\d{2}-\d{2}/.test(e.date||"")?e.date:""}"></div>
+      <div><label>Follow-up</label><input id="m-followup" type="date" value="${e.followUp||""}"></div>
+      <div><label>Source</label><select id="m-source">${ENQ_SOURCES.map(s=>`<option ${e.source===s?"selected":""}>${s}</option>`).join("")}</select></div>
+    </div>
+    <button class="btn sm" id="m-save" style="margin-top:10px">Save changes</button>
+
     <div class="sec-title">Contact</div>
     <p style="font-size:14px">${e.email||"—"} · ${e.phone||"—"} ${e.company?" · "+e.company:""}</p>
-    ${(e.budget||e.accommodation||e.date)?`<div class="sec-title">Details</div>
-      <p style="font-size:14px">${e.date?`Date: ${e.date} · `:""}${e.budget?`Budget: ${e.budget} · `:""}${e.accommodation?`Accommodation: ${e.accommodation}`:""}</p>`:""}
+    ${(e.budget||e.accommodation)?`<p style="font-size:14px;color:var(--muted)">${e.budget?`Budget: ${e.budget} · `:""}${e.accommodation?`Accommodation: ${e.accommodation}`:""}</p>`:""}
     ${e.notes?`<div class="sec-title">Enquiry brief</div><p style="font-size:14px;line-height:1.6">${e.notes}</p>`:""}
-    <p class="qs-sub" style="margin-top:10px">Source: ${e.source||"manual"}</p>
     ${e.costing?`<div class="sec-title">Profitability</div>
       <div class="enq-costing">
         <div><span class="ec-v">${money(Math.round(e.costing.profit))}</span><span class="ec-k">Est. profit</span></div>
@@ -730,15 +763,16 @@ function openEnquiryDetail(e){
       <button class="btn" id="enq-cost">${e.costing?"Re-cost this event":"Cost this event"}</button>
       <button class="btn ghost" id="enq-quote">Create a quote</button>
     </div>
-    <div class="sec-title">Move to stage</div>
-    <div class="chips" id="stage-chips">${ENQ_STAGES.map(([s,l])=>`<button class="chip ${e.status===s?"on":""}" data-s="${s}">${l}</button>`).join("")}</div>
-    <div class="qs-sub" style="margin-top:14px">Ref ${e.id} · logged ${new Date(e.created).toLocaleString("en-GB")}</div>`;
-  showModal(e.name, e.source==="quote builder"?"From quote builder":"Enquiry", body);
+    <div class="qs-sub" style="margin-top:14px">Ref ${e.id} · ${e.owner?`owned by ${e.owner} · `:""}logged ${new Date(e.created).toLocaleString("en-GB")}${e.followUp?` · follow up ${fmtDate(e.followUp)}`:""}</div>`;
+  showModal(e.name, `${et?et.label:"Enquiry"} · ${e.source||"manual"}`, body);
+  $("#m-save").onclick=()=>{
+    DB.update(e.id,{ owner:$("#m-owner").value, status:$("#m-stage").value,
+      value:parseFloat($("#m-value").value)||0, date:$("#m-date").value||e.date,
+      followUp:$("#m-followup").value, source:$("#m-source").value });
+    closeModal(); render();
+  };
   $("#enq-cost").onclick=()=>{ closeModal(); profitPrefill={ enquiry:e }; switchTab("profit"); };
   $("#enq-quote").onclick=()=>{ closeModal(); prefill={room:e.room||"woodlands",event:e.event||"wedding",pax:parseInt(e.pax)||40}; switchTab("quote"); };
-  document.querySelectorAll("#stage-chips .chip").forEach(c=>c.onclick=()=>{
-    DB.update(e.id,{status:c.dataset.s}); closeModal(); render();
-  });
 }
 
 /* ============================================================ ADMIN */
@@ -963,6 +997,16 @@ function applyTemplate(key){
 
 function renderProfit(v){
   v.appendChild(head("Event Profitability Tool","Price an event and see live profit, margin, break-even and a cost breakdown. Load a template, save scenarios, print a summary."));
+  const help=el("div","help-box");
+  help.innerHTML=`<button class="help-toggle" id="p-help-t">💡 How to use this tool</button>
+    <div class="help-body hidden" id="p-help-b">
+      <p><b>1. Start with a template</b> — pick the event type (wedding, meeting, Christmas…) to load typical pricing, food/drink split and staffing. This avoids costing a small meeting on wedding assumptions.</p>
+      <p><b>2. Set price &amp; covers</b> — the package price per head and number of guests drive revenue. The beverage on-spend is the estimated bar total on top.</p>
+      <p><b>3. Package elements</b> should add up to your package price (the tick confirms it). These split the price into food, drinks, room hire etc. so cost-of-sales is calculated correctly.</p>
+      <p><b>4. Payroll</b> — staff × hours × rate. <b>Controllable costs</b> are extras you pay but don't recharge (linen, security).</p>
+      <p><b>5. Read the result</b> — the coloured bar shows where the money goes; <b>green ≥50% margin, amber 30–50%, red below</b>. <b>Break-even</b> tells you the minimum covers at this price. Save scenarios to compare options before quoting.</p>
+    </div>`;
+  v.appendChild(help);
   if(!PROFIT){ PROFIT=JSON.parse(JSON.stringify(PROFIT_DEFAULTS)); PROFIT._price=106.50; PROFIT._template="wedding"; }
 
   // pre-fill from an enquiry if opened via the dashboard
@@ -1062,6 +1106,7 @@ function renderProfit(v){
   };
   renderScenarios();
   calcProfit();
+  const ht=$("#p-help-t"); if(ht) ht.onclick=()=>$("#p-help-b").classList.toggle("hidden");
 }
 
 function saveScenario(){
@@ -1205,6 +1250,102 @@ function printProfit(){
     <p class="muted" style="margin-top:20px">Internal costing only — not for circulation to customers.</p>
     <script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script></body></html>`);
   win.document.close();
+}
+
+/* ============================================================ SALES DASHBOARD (BOB) */
+function renderDashboard(v){
+  v.appendChild(head("Meeting & Events Sales Dashboard","Live business-on-books from Rezlynx. Prospect, confirmed and cancelled analysis."));
+  if(typeof BOB==="undefined"){ v.appendChild(el("div","empty","BOB data not loaded.")); return; }
+
+  const sum=arr=>arr.reduce((s,r)=>s+(r.value||0),0);
+  const prospectVal=sum(BOB.prospect), confirmedVal=sum(BOB.confirmed), cancelledVal=sum(BOB.cancelled);
+
+  // KPI cards
+  const kpis=el("div","stat-cards");
+  kpis.innerHTML=`
+    <div class="stat-card accent"><div class="sc-v">${money(Math.round(prospectVal))}</div><div class="sc-k">Prospect pipeline</div></div>
+    <div class="stat-card"><div class="sc-v">${money(Math.round(confirmedVal))}</div><div class="sc-k">Confirmed on books</div></div>
+    <div class="stat-card"><div class="sc-v">${BOB.prospect.length}</div><div class="sc-k">Live prospects</div></div>
+    <div class="stat-card"><div class="sc-v">${BOB.confirmed.length}</div><div class="sc-k">Confirmed bookings</div></div>
+    <div class="stat-card"><div class="sc-v">${money(Math.round(prospectVal/(BOB.prospect.length||1)))}</div><div class="sc-k">Avg prospect value</div></div>
+    <div class="stat-card"><div class="sc-v">${BOB.cancelled.length}</div><div class="sc-k">Cancelled</div></div>`;
+  v.appendChild(kpis);
+  v.appendChild(el("p","qs-sub",`<span style="font-size:12px;color:var(--muted)">Data pulled ${new Date(BOB.pulled).toLocaleDateString("en-GB")} from ${BOB.source}.</span>`));
+
+  // ---- charts row 1: pipeline by room (bar) + value by rate plan (pie) ----
+  const row1=el("div","chart-row");
+  row1.appendChild(chartCard("Prospect pipeline value by room", barChart(topByRoom(BOB.prospect,8))));
+  row1.appendChild(chartCard("Prospect value by rate plan", pieChart(byKey(BOB.prospect,"ratePlan",6))));
+  v.appendChild(row1);
+
+  // ---- charts row 2: by owner (pie) + monthly arrivals (bar) ----
+  const row2=el("div","chart-row");
+  row2.appendChild(chartCard("Prospect value by owner", pieChart(byKey(BOB.prospect,"operator",5))));
+  row2.appendChild(chartCard("Confirmed value by room", barChart(topByRoom(BOB.confirmed,6))));
+  v.appendChild(row2);
+
+  // ---- monthly pipeline (arrivals) ----
+  v.appendChild(chartCard("Prospect pipeline by arrival month", barChart(byMonth(BOB.prospect)), true));
+
+  // ---- top opportunities table ----
+  v.appendChild(el("div","sec-title","Top 10 prospect opportunities"));
+  const top=[...BOB.prospect].sort((a,b)=>b.value-a.value).slice(0,10);
+  const t=el("table","data-table");
+  t.innerHTML=`<tr><th>Guest</th><th>Room</th><th>Arrival</th><th>PAX</th><th>Owner</th><th style="text-align:right">Value</th></tr>`+
+    top.map(r=>`<tr><td>${r.guest}</td><td>${r.room}</td><td>${r.arrival?new Date(r.arrival).toLocaleDateString("en-GB"):"—"}</td>
+      <td>${r.pax||"—"}</td><td>${r.operator}</td><td style="text-align:right;font-weight:600">${money(Math.round(r.value))}</td></tr>`).join("");
+  v.appendChild(t);
+}
+
+/* ---- data helpers ---- */
+function byKey(arr,key,limit){
+  const m={}; arr.forEach(r=>{ const k=r[key]||"—"; m[k]=(m[k]||0)+(r.value||0); });
+  let e=Object.entries(m).filter(([,val])=>val>0).sort((a,b)=>b[1]-a[1]);
+  if(limit && e.length>limit){ const top=e.slice(0,limit-1);
+    const rest=e.slice(limit-1).reduce((s,[,val])=>s+val,0); top.push(["Other",rest]); e=top; }
+  return e.map(([label,val])=>({label,val}));
+}
+function topByRoom(arr,limit){ return byKey(arr,"room",limit); }
+function byMonth(arr){
+  const m={}; arr.forEach(r=>{ if(!r.arrival)return; const d=new Date(r.arrival);
+    const k=d.toLocaleDateString("en-GB",{month:"short",year:"2-digit"}); const sortK=d.getFullYear()*100+d.getMonth();
+    m[k]=m[k]||{val:0,sortK}; m[k].val+=r.value||0; });
+  return Object.entries(m).sort((a,b)=>a[1].sortK-b[1].sortK).map(([label,o])=>({label,val:o.val}));
+}
+
+/* ---- SVG chart builders ---- */
+const CHART_COLOURS=["#1a2b47","#BB9979","#4a7c59","#7a9bc4","#c9814f","#9d7d5f","#b0a99f","#d4b483"];
+function chartCard(title,svg,wide){
+  const c=el("div","chart-card"+(wide?" wide":""));
+  c.innerHTML=`<div class="cc-title">${title}</div>${svg}`;
+  return c;
+}
+function barChart(data){
+  if(!data.length) return `<div class="qs-sub">No data</div>`;
+  const max=Math.max(...data.map(d=>d.val))||1;
+  const bw=Math.min(60, 320/data.length), gap=14, h=180, w=data.length*(bw+gap)+20;
+  const bars=data.map((d,i)=>{ const bh=(d.val/max)*(h-40); const x=15+i*(bw+gap), y=h-25-bh;
+    return `<g>
+      <rect x="${x}" y="${y}" width="${bw}" height="${bh}" rx="3" fill="${CHART_COLOURS[i%CHART_COLOURS.length]}"/>
+      <text x="${x+bw/2}" y="${y-4}" font-size="9" fill="#3a4256" text-anchor="middle">£${Math.round(d.val/1000)}k</text>
+      <text x="${x+bw/2}" y="${h-10}" font-size="9" fill="#7a8494" text-anchor="middle">${d.label.length>9?d.label.slice(0,8)+"…":d.label}</text>
+    </g>`; }).join("");
+  return `<svg viewBox="0 0 ${Math.max(w,300)} ${h}" style="width:100%;height:auto" xmlns="http://www.w3.org/2000/svg">${bars}</svg>`;
+}
+function pieChart(data){
+  if(!data.length) return `<div class="qs-sub">No data</div>`;
+  const total=data.reduce((s,d)=>s+d.val,0)||1;
+  const cx=90,cy=90,r=75; let ang=-Math.PI/2;
+  const slices=data.map((d,i)=>{ const frac=d.val/total, a2=ang+frac*Math.PI*2;
+    const x1=cx+r*Math.cos(ang), y1=cy+r*Math.sin(ang), x2=cx+r*Math.cos(a2), y2=cy+r*Math.sin(a2);
+    const large=frac>0.5?1:0;
+    const path=`M${cx},${cy} L${x1.toFixed(1)},${y1.toFixed(1)} A${r},${r} 0 ${large} 1 ${x2.toFixed(1)},${y2.toFixed(1)} Z`;
+    ang=a2; return `<path d="${path}" fill="${CHART_COLOURS[i%CHART_COLOURS.length]}" stroke="#fff" stroke-width="1.5"/>`;
+  }).join("");
+  const legend=data.map((d,i)=>`<div class="pie-leg"><i style="background:${CHART_COLOURS[i%CHART_COLOURS.length]}"></i>
+    ${d.label.length>16?d.label.slice(0,15)+"…":d.label} <b>${Math.round(d.val/total*100)}%</b></div>`).join("");
+  return `<div class="pie-wrap"><svg viewBox="0 0 180 180" style="width:160px;flex-shrink:0" xmlns="http://www.w3.org/2000/svg">${slices}</svg>
+    <div class="pie-legend">${legend}</div></div>`;
 }
 
 /* ============================================================ HELPERS */

@@ -159,6 +159,44 @@ main{flex:1;padding:24px 20px 60px;max-width:1180px;margin:0 auto;width:100%}
 .pkg-card li{display:flex;gap:7px}.pkg-card li::before{content:"✓";color:var(--ok);font-weight:700}
 .pkg-card .min{margin-top:11px;font-size:12px;color:var(--muted)}
 
+/* ---------- MULTI-ROOM QUOTE LINES ---------- */
+.rl-body{display:flex;gap:14px}
+.rl-img{width:130px;height:100px;object-fit:cover;border-radius:8px;flex-shrink:0;border:1px solid var(--line)}
+.rl-spec{margin-top:10px;font-size:12px;color:var(--muted);background:#fff;border-radius:7px;padding:8px 11px;border:1px solid var(--line)}
+@media(max-width:600px){.rl-body{flex-direction:column}.rl-img{width:100%;height:130px}}
+
+/* ---------- SALES DASHBOARD ---------- */
+.chart-row{display:grid;gap:16px;grid-template-columns:1fr 1fr;margin-bottom:16px}
+.chart-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;box-shadow:var(--shadow)}
+.chart-card.wide{margin-bottom:16px}
+.cc-title{font-size:13px;font-weight:700;color:var(--ink-2);margin-bottom:14px}
+.pie-wrap{display:flex;gap:16px;align-items:center}
+.pie-legend{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--ink-2)}
+.pie-leg{display:flex;align-items:center;gap:7px}
+.pie-leg i{width:11px;height:11px;border-radius:3px;flex-shrink:0}
+.pie-leg b{margin-left:auto;color:var(--navy)}
+@media(max-width:700px){.chart-row{grid-template-columns:1fr}}
+
+/* ---------- ENHANCED ENQUIRY CARDS ---------- */
+.col-value{font-size:12px;font-weight:600;color:var(--gold-dk);margin:-4px 0 10px}
+.ec-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.owner-badge{background:var(--navy);color:#fff;font-size:10px;font-weight:700;width:24px;height:24px;
+  border-radius:50%;display:grid;place-items:center;flex-shrink:0;letter-spacing:.3px}
+.tag.val{background:#e8f0e6;border-color:#cfe0ca;color:var(--ok);font-weight:700}
+.followup{margin-top:8px;font-size:11.5px;color:var(--muted);background:var(--paper);border-radius:6px;padding:4px 8px}
+.followup.overdue{background:#fdf0e3;color:#b3261e;font-weight:600}
+.manage-grid{display:grid;gap:12px;grid-template-columns:1fr 1fr;margin-top:4px}
+.manage-grid label{display:block;font-size:11px;font-weight:600;color:var(--ink-2);margin-bottom:4px}
+.manage-grid select,.manage-grid input{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:7px;background:var(--paper)}
+
+/* ---------- HELP BOX ---------- */
+.help-box{margin-bottom:18px}
+.help-toggle{background:var(--gold-soft);color:var(--gold-dk);font-weight:600;font-size:13px;padding:9px 15px;border-radius:9px}
+.help-body{background:#fdfbf8;border:1px solid var(--gold-soft);border-radius:10px;padding:16px 18px;margin-top:10px}
+.help-body p{font-size:13px;color:var(--ink-2);margin-bottom:9px;line-height:1.55}
+.help-body p:last-child{margin-bottom:0}
+.help-body b{color:var(--navy)}
+
 /* ---------- ENQUIRIES ---------- */
 .stat-cards{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:18px}
 .stat-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;box-shadow:var(--shadow)}
@@ -424,6 +462,7 @@ main{flex:1;padding:24px 20px 60px;max-width:1180px;margin:0 auto;width:100%}
   </header>
   <nav class="tabs" id="tabs">
     <button data-tab="rooms" class="active">Rooms</button>
+    <button data-tab="dashboard">Sales Dashboard</button>
     <button data-tab="packages">Packages</button>
     <button data-tab="suppliers">Suppliers</button>
     <button data-tab="quote">Create Quote</button>
@@ -438,6 +477,7 @@ main{flex:1;padding:24px 20px 60px;max-width:1180px;margin:0 auto;width:100%}
 <div id="modal-root"></div>
 
 <script src="data.js"></script>
+<script src="bob-data.js"></script>
 <script src="layouts.js"></script>
 <!-- Firebase (compat SDK for simple script-tag use) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
