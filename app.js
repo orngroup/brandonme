@@ -624,14 +624,12 @@ const ENQ_STAGES=[["enquiry","Enquiry"],["provisional","Provisional"],["confirme
 const ENQ_OWNERS=["Nicola Cartwright","Natalie Freeman","Ajay Kawa","Raj Kumar","Alia Taub"];
 const ENQ_SOURCES=["Website","Events chat","Hitched","arrangeMY / agent","Phone","Email","Walk-in","Referral","BOB / Rezlynx","Other"];
 
-let PIPE_FILTER={ key:null, val:null }; // active chart filter
+let PIPE_FILTER={ room:"", event:"", status:"", owner:"", source:"", search:"" };
+function pipeFilterActive(){ return Object.values(PIPE_FILTER).some(x=>x); }
 
-/* Combine BOB records + manual enquiries into one pipeline dataset */
 function pipelineData(){
   const out=[];
-  // manual/chat/website enquiries from the live store
   DB.all().forEach(e=>out.push(Object.assign({_kind:"enquiry"}, e)));
-  // BOB records mapped into the pipeline
   if(typeof BOB!=="undefined"){
     const map={ prospect:"provisional", confirmed:"confirmed", cancelled:"cancelled" };
     ["prospect","confirmed","cancelled"].forEach(bucket=>{
@@ -648,87 +646,114 @@ function pipelineData(){
 function roomIdFromName(name){ const r=ROOMS.find(x=>x.name===name); return r?r.id:""; }
 
 function renderPipeline(v){
-  v.appendChild(head("Sales Pipeline","Live pipeline from Rezlynx business-on-books plus new enquiries. Click any chart to filter; click a card to manage it."));
+  v.appendChild(head("Sales Pipeline","Every opportunity in one place — Rezlynx business-on-books plus new enquiries. Filter across the top, click a row to manage it."));
   const tb=el("div","enq-toolbar");
   tb.innerHTML=`<button class="btn" id="enq-new">+ New enquiry</button>
     <button class="btn ghost" id="enq-chat">Open events chat</button>
-    <button class="btn ghost" id="enq-link">Copy chat link</button>
-    <div class="spacer"></div>
-    ${PIPE_FILTER.key?`<button class="btn ghost sm" id="pf-clear">✕ Clear filter: ${PIPE_FILTER.val}</button>`:""}`;
+    <button class="btn ghost" id="enq-link">Copy chat link</button><div class="spacer"></div>`;
   v.appendChild(tb);
   $("#enq-new").onclick=()=>openEnquiryForm({});
   $("#enq-chat").onclick=()=>switchTab("chat");
   $("#enq-link").onclick=()=>{ const url=location.href.split("#")[0]+"#events-chat";
     navigator.clipboard?.writeText(url); alert("Shareable events-chat link copied:\n"+url); };
-  if($("#pf-clear")) $("#pf-clear").onclick=()=>{ PIPE_FILTER={key:null,val:null}; render(); };
 
-  let all=pipelineData();
-  // apply active filter
-  if(PIPE_FILTER.key){
-    all=all.filter(e=>{
-      if(PIPE_FILTER.key==="room") return (e.roomName||ROOMS.find(r=>r.id===e.room)?.name)===PIPE_FILTER.val;
-      if(PIPE_FILTER.key==="owner") return e.owner===PIPE_FILTER.val;
-      if(PIPE_FILTER.key==="ratePlan") return e.ratePlan===PIPE_FILTER.val;
-      if(PIPE_FILTER.key==="source") return (e.source||"")===PIPE_FILTER.val;
-      return true;
-    });
-  }
+  let allRaw=pipelineData();
 
-  // ---- KPI cards ----
-  const openItems=all.filter(e=>["enquiry","provisional"].includes(e.status));
-  const confItems=all.filter(e=>e.status==="confirmed");
+  // ---- KPI cards (on full dataset) ----
+  const openAll=allRaw.filter(e=>["enquiry","provisional"].includes(e.status));
+  const confAll=allRaw.filter(e=>e.status==="confirmed");
   const today=new Date().toISOString().slice(0,10);
-  const overdue=all.filter(e=>e.followUp && e.followUp<today && ["enquiry","provisional"].includes(e.status)).length;
+  const overdue=allRaw.filter(e=>e.followUp && e.followUp<today && ["enquiry","provisional"].includes(e.status)).length;
   const kpis=el("div","stat-cards");
   kpis.innerHTML=`
-    <div class="stat-card accent"><div class="sc-v">${money(Math.round(openItems.reduce((s,e)=>s+(e.value||0),0)))}</div><div class="sc-k">Open pipeline value</div></div>
-    <div class="stat-card"><div class="sc-v">${openItems.length}</div><div class="sc-k">Open opportunities</div></div>
-    <div class="stat-card"><div class="sc-v">${money(Math.round(confItems.reduce((s,e)=>s+(e.value||0),0)))}</div><div class="sc-k">Confirmed value</div></div>
-    <div class="stat-card"><div class="sc-v">${confItems.length}</div><div class="sc-k">Confirmed</div></div>
-    <div class="stat-card"><div class="sc-v">${all.length}</div><div class="sc-k">Total in view</div></div>
+    <div class="stat-card accent"><div class="sc-v">${money(Math.round(openAll.reduce((s,e)=>s+(e.value||0),0)))}</div><div class="sc-k">Open pipeline value</div></div>
+    <div class="stat-card"><div class="sc-v">${openAll.length}</div><div class="sc-k">Open opportunities</div></div>
+    <div class="stat-card"><div class="sc-v">${money(Math.round(confAll.reduce((s,e)=>s+(e.value||0),0)))}</div><div class="sc-k">Confirmed value</div></div>
+    <div class="stat-card"><div class="sc-v">${confAll.length}</div><div class="sc-k">Confirmed</div></div>
+    <div class="stat-card"><div class="sc-v">${allRaw.length}</div><div class="sc-k">Total records</div></div>
     <div class="stat-card"><div class="sc-v" style="${overdue?'color:#b3261e':''}">${overdue}</div><div class="sc-k">Follow-ups overdue</div></div>`;
   v.appendChild(kpis);
 
-  // ---- clickable charts (based on open + provisional pipeline) ----
-  const chartBase=all.filter(e=>["enquiry","provisional","confirmed"].includes(e.status));
+  // ---- charts (clickable → set room/owner filter) ----
+  const chartBase=allRaw.filter(e=>["enquiry","provisional","confirmed"].includes(e.status));
   const row1=el("div","chart-row");
   row1.appendChild(clickableChart("Pipeline value by room","room", barChartData(chartBase,e=>e.roomName||ROOMS.find(r=>r.id===e.room)?.name||"—")));
   row1.appendChild(clickableChart("Pipeline value by owner","owner", pieChartData(chartBase,e=>e.owner||"Unassigned")));
   v.appendChild(row1);
-  const row2=el("div","chart-row");
-  row2.appendChild(clickableChart("Value by rate plan","ratePlan", pieChartData(chartBase,e=>e.ratePlan||"Enquiry")));
-  row2.appendChild(clickableChart("Value by source","source", pieChartData(chartBase,e=>e.source||"manual")));
-  v.appendChild(row2);
 
-  // ---- pipeline board ----
-  const cols=el("div","enq-cols");
-  ENQ_STAGES.forEach(([sid,slabel])=>{
-    const items=all.filter(e=>e.status===sid).sort((a,b)=>(b.value||0)-(a.value||0));
-    const stageVal=items.reduce((s,e)=>s+(e.value||0),0);
-    const col=el("div","enq-col");
-    col.innerHTML=`<h4>${slabel} <span>${items.length}</span></h4>
-      ${stageVal?`<div class="col-value">${money(Math.round(stageVal))}</div>`:""}`;
-    items.slice(0,60).forEach(e=>{
-      const roomName=e.roomName||ROOMS.find(r=>r.id===e.room)?.name;
-      const et=EVENT_TYPES.find(t=>t.id===e.event);
-      const fmtDate=d=>d?(/^\d{4}-\d{2}-\d{2}/.test(d)?new Date(d).toLocaleDateString("en-GB"):d):"";
-      const overdueF = e.followUp && e.followUp<today && !["confirmed","cancelled"].includes(e.status);
-      const initials = e.owner? e.owner.split(" ").map(w=>w[0]).join("").slice(0,2) : "";
-      const card=el("div","enq-card");
-      card.innerHTML=`<div class="ec-top">
-          <div class="nm">${e.name}</div>
-          ${e.owner?`<span class="owner-badge" title="${e.owner}">${initials}</span>`:""}
-        </div>
-        <div class="meta">${et?et.icon+" "+et.label:(e.ratePlan||"—")} · ${e.pax?e.pax+" pax":""}${e.date?" · "+fmtDate(e.date):""}</div>
-        <div class="tags">${e.value?`<span class="tag val">${money(Math.round(e.value))}</span>`:""}${roomName?`<span class="tag">${roomName}</span>`:""}${e.costing?`<span class="tag profit">${money(Math.round(e.costing.profit))} profit</span>`:""}<span class="tag src">${e._kind==="bob"?"BOB":(e.source||"manual")}</span></div>
-        ${e.followUp?`<div class="followup ${overdueF?"overdue":""}">${overdueF?"⚠ ":"📅 "}Follow up ${fmtDate(e.followUp)}</div>`:""}`;
-      card.onclick=()=>openEnquiryDetail(e);
-      col.appendChild(card);
-    });
-    if(items.length>60) col.appendChild(el("div","qs-sub",`<span style="font-size:11px">+${items.length-60} more…</span>`));
-    cols.appendChild(col);
+  // ---- FILTER BAR ----
+  const rooms=[...new Set(allRaw.map(e=>e.roomName||ROOMS.find(r=>r.id===e.room)?.name).filter(Boolean))].sort();
+  const owners=[...new Set(allRaw.map(e=>e.owner).filter(Boolean))].sort();
+  const sources=[...new Set(allRaw.map(e=>e.source).filter(Boolean))].sort();
+  const bar=el("div","filter-bar");
+  bar.innerHTML=`
+    <input id="fb-search" placeholder="🔍 Search name…" value="${PIPE_FILTER.search}">
+    <select id="fb-status"><option value="">All statuses</option>${ENQ_STAGES.map(([s,l])=>`<option value="${s}" ${PIPE_FILTER.status===s?"selected":""}>${l}</option>`).join("")}</select>
+    <select id="fb-room"><option value="">All rooms</option>${rooms.map(r=>`<option ${PIPE_FILTER.room===r?"selected":""}>${r}</option>`).join("")}</select>
+    <select id="fb-event"><option value="">All event types</option>${EVENT_TYPES.map(t=>`<option value="${t.id}" ${PIPE_FILTER.event===t.id?"selected":""}>${t.label}</option>`).join("")}</select>
+    <select id="fb-owner"><option value="">All owners</option>${owners.map(o=>`<option ${PIPE_FILTER.owner===o?"selected":""}>${o}</option>`).join("")}</select>
+    <select id="fb-source"><option value="">All sources</option>${sources.map(s=>`<option ${PIPE_FILTER.source===s?"selected":""}>${s}</option>`).join("")}</select>
+    ${pipeFilterActive()?`<button class="btn ghost sm" id="fb-clear">Clear</button>`:""}`;
+  v.appendChild(bar);
+  const setF=(k,val)=>{ PIPE_FILTER[k]=val; renderPipeRows(); updateFilterCount(); };
+  $("#fb-search").oninput=e=>setF("search",e.target.value);
+  $("#fb-status").onchange=e=>setF("status",e.target.value);
+  $("#fb-room").onchange=e=>setF("room",e.target.value);
+  $("#fb-event").onchange=e=>setF("event",e.target.value);
+  $("#fb-owner").onchange=e=>setF("owner",e.target.value);
+  $("#fb-source").onchange=e=>setF("source",e.target.value);
+  if($("#fb-clear")) $("#fb-clear").onclick=()=>{ PIPE_FILTER={room:"",event:"",status:"",owner:"",source:"",search:""}; render(); };
+
+  // filtered count + table container
+  v.appendChild(el("div","pipe-count",`<span id="pipe-count"></span>`));
+  const tableWrap=el("div"); tableWrap.id="pipe-table"; v.appendChild(tableWrap);
+
+  window._pipeAll=allRaw;
+  renderPipeRows(); updateFilterCount();
+}
+
+function filteredPipe(){
+  const today=new Date().toISOString().slice(0,10);
+  return (window._pipeAll||[]).filter(e=>{
+    const roomName=e.roomName||ROOMS.find(r=>r.id===e.room)?.name||"";
+    if(PIPE_FILTER.room && roomName!==PIPE_FILTER.room) return false;
+    if(PIPE_FILTER.status && e.status!==PIPE_FILTER.status) return false;
+    if(PIPE_FILTER.event && e.event!==PIPE_FILTER.event) return false;
+    if(PIPE_FILTER.owner && e.owner!==PIPE_FILTER.owner) return false;
+    if(PIPE_FILTER.source && e.source!==PIPE_FILTER.source) return false;
+    if(PIPE_FILTER.search && !(e.name||"").toLowerCase().includes(PIPE_FILTER.search.toLowerCase())) return false;
+    return true;
   });
-  v.appendChild(cols);
+}
+function updateFilterCount(){
+  const c=$("#pipe-count"); if(!c)return;
+  const list=filteredPipe();
+  const val=list.reduce((s,e)=>s+(e.value||0),0);
+  c.innerHTML=`Showing <b>${list.length}</b> of ${(window._pipeAll||[]).length} · total value <b>${money(Math.round(val))}</b>`;
+}
+const STATUS_LABEL={enquiry:"Enquiry",provisional:"Provisional",confirmed:"Confirmed",cancelled:"Cancelled"};
+function renderPipeRows(){
+  const box=$("#pipe-table"); if(!box)return;
+  const list=filteredPipe().sort((a,b)=>(b.value||0)-(a.value||0));
+  const today=new Date().toISOString().slice(0,10);
+  const fmtDate=d=>d?(/^\d{4}-\d{2}-\d{2}/.test(d)?new Date(d).toLocaleDateString("en-GB"):d):"—";
+  if(!list.length){ box.innerHTML=`<div class="empty"><div class="big">No matches</div>Try clearing a filter.</div>`; return; }
+  box.innerHTML=`<table class="pipe-table">
+    <tr><th>Name</th><th>Status</th><th>Event / Rate</th><th>Room</th><th>Date</th><th>PAX</th><th>Owner</th><th>Source</th><th style="text-align:right">Value</th></tr>`+
+    list.slice(0,200).map(e=>{
+      const roomName=e.roomName||ROOMS.find(r=>r.id===e.room)?.name||"—";
+      const et=EVENT_TYPES.find(t=>t.id===e.event);
+      const overdueF = e.followUp && e.followUp<today && !["confirmed","cancelled"].includes(e.status);
+      return `<tr class="pipe-row" data-id="${e.id}">
+        <td class="pr-name">${e.name}${overdueF?' <span class="pr-flag" title="Follow-up overdue">⚠</span>':''}</td>
+        <td><span class="status-pill st-${e.status}">${STATUS_LABEL[e.status]||e.status}</span></td>
+        <td>${et?et.icon+" "+et.label:(e.ratePlan||"—")}</td>
+        <td>${roomName}</td><td>${fmtDate(e.date)}</td><td>${e.pax||"—"}</td>
+        <td>${e.owner||"—"}</td><td>${e._kind==="bob"?"BOB":(e.source||"manual")}</td>
+        <td style="text-align:right;font-weight:600">${e.value?money(Math.round(e.value)):"—"}</td></tr>`;
+    }).join("")+`</table>${list.length>200?`<div class="qs-sub" style="margin-top:8px">Showing first 200 — narrow with filters to see more.</div>`:""}`;
+  box.querySelectorAll(".pipe-row").forEach(row=>row.onclick=()=>{
+    const e=list.find(x=>x.id===row.dataset.id); if(e) openEnquiryDetail(e); });
 }
 
 /* chart data helpers that return {label,val} sorted */
@@ -745,17 +770,11 @@ function clickableChart(title,filterKey,data){
   const card=el("div","chart-card clickable");
   const isBar = data.length>5 || title.includes("room");
   card.innerHTML=`<div class="cc-title">${title} <span class="cc-hint">click to filter</span></div>${isBar?barChart(data):pieChart(data)}`;
-  // attach click handlers to segments by wrapping labels
-  card.querySelectorAll("text").forEach(()=>{});
-  card.onclick=(ev)=>{
-    // figure out which label was clicked from data — use a simple menu of the data labels
-    // (SVG segments are small; clicking the card cycles a chooser)
-  };
-  // Better: render clickable legend rows below
   const chooser=el("div","chart-filter-row");
   chooser.innerHTML=data.map(d=>`<button class="cf-btn" data-val="${d.label.replace(/"/g,'&quot;')}">${d.label} · ${money(Math.round(d.val))}</button>`).join("");
   chooser.querySelectorAll(".cf-btn").forEach(b=>b.onclick=(e)=>{ e.stopPropagation();
-    PIPE_FILTER={ key:filterKey, val:b.dataset.val }; render(); });
+    if(b.dataset.val==="Other") return;
+    PIPE_FILTER[filterKey]=b.dataset.val; render(); });
   card.appendChild(chooser);
   return card;
 }
@@ -1328,30 +1347,56 @@ function printProfit(){
 
 /* ============================================================ M&E UPGRADE TRACKER */
 function renderMnE(v){
-  v.appendChild(head("M&E Upgrade — Equipment Tracker","Manage equipment needed in each room: TVs, projectors, connectivity, furniture, power and software. Track from needed → ordered → delivered → installed."));
+  v.appendChild(head("M&E Upgrade — Equipment Tracker","Manage equipment per room: TVs, projectors, connectivity, furniture, power and software. Track needed → ordered → delivered → installed, with cost and supplier."));
 
-  // build a working copy from localStorage overlay (so edits persist)
-  const state=MnEState.all();
-
-  // ---- overall progress KPIs ----
-  let counts={needed:0,ordered:0,delivered:0,installed:0}, total=0;
-  ROOMS.forEach(r=>{ const items=MnEState.items(r.id);
-    items.forEach(it=>{ counts[it.status]=(counts[it.status]||0)+1; total++; }); });
+  // ---- summary bar (status counts + cost) ----
+  let counts={needed:0,ordered:0,delivered:0,installed:0}, total=0, totalCost=0, committedCost=0, outstandingCost=0;
+  const bySupplier={};
+  ROOMS.forEach(r=>{ MnEState.items(r.id).forEach(it=>{
+    counts[it.status]=(counts[it.status]||0)+1; total++;
+    const lineCost=(it.cost||0)*(it.qty||1); totalCost+=lineCost;
+    if(["ordered","delivered","installed"].includes(it.status)) committedCost+=lineCost; else outstandingCost+=lineCost;
+    if(it.supplier){ bySupplier[it.supplier]=(bySupplier[it.supplier]||0)+lineCost; }
+  }); });
   const kpis=el("div","stat-cards");
   kpis.innerHTML=`
+    <div class="stat-card accent"><div class="sc-v">${money(Math.round(totalCost))}</div><div class="sc-k">Total equipment cost</div></div>
+    <div class="stat-card"><div class="sc-v">${money(Math.round(committedCost))}</div><div class="sc-k">Committed (ordered+)</div></div>
+    <div class="stat-card"><div class="sc-v" style="color:#b3261e">${money(Math.round(outstandingCost))}</div><div class="sc-k">Outstanding (needed)</div></div>
     <div class="stat-card"><div class="sc-v">${total}</div><div class="sc-k">Total items</div></div>
-    <div class="stat-card"><div class="sc-v" style="color:#b3261e">${counts.needed}</div><div class="sc-k">Needed</div></div>
-    <div class="stat-card"><div class="sc-v" style="color:#c07a3e">${counts.ordered}</div><div class="sc-k">Ordered</div></div>
-    <div class="stat-card"><div class="sc-v" style="color:#7a9bc4">${counts.delivered}</div><div class="sc-k">Delivered</div></div>
-    <div class="stat-card accent"><div class="sc-v">${counts.installed}</div><div class="sc-k">Installed</div></div>
+    <div class="stat-card"><div class="sc-v">${counts.installed}</div><div class="sc-k">Installed</div></div>
     <div class="stat-card"><div class="sc-v">${total?Math.round(counts.installed/total*100):0}%</div><div class="sc-k">Complete</div></div>`;
   v.appendChild(kpis);
+
+  // status progress + supplier breakdown
+  const sub=el("div","mne-subbar");
+  sub.innerHTML=`
+    <div class="mne-progress">
+      <span class="mp-seg st-needed" style="flex:${counts.needed||0.001}" title="Needed ${counts.needed}"></span>
+      <span class="mp-seg st-ordered" style="flex:${counts.ordered||0.001}" title="Ordered ${counts.ordered}"></span>
+      <span class="mp-seg st-delivered" style="flex:${counts.delivered||0.001}" title="Delivered ${counts.delivered}"></span>
+      <span class="mp-seg st-installed" style="flex:${counts.installed||0.001}" title="Installed ${counts.installed}"></span>
+    </div>
+    <div class="mne-legend">
+      <span><i class="st-needed"></i>Needed ${counts.needed}</span>
+      <span><i class="st-ordered"></i>Ordered ${counts.ordered}</span>
+      <span><i class="st-delivered"></i>Delivered ${counts.delivered}</span>
+      <span><i class="st-installed"></i>Installed ${counts.installed}</span>
+    </div>`;
+  v.appendChild(sub);
+  if(Object.keys(bySupplier).length){
+    const sup=el("div","source-bar");
+    sup.innerHTML=`<span class="sb-label">Cost by supplier:</span>`+
+      Object.entries(bySupplier).sort((a,b)=>b[1]-a[1]).map(([s,c])=>`<span class="src-pill">${s} <b>${money(Math.round(c))}</b></span>`).join("");
+    v.appendChild(sup);
+  }
 
   // ---- per-room panels ----
   ROOMS.forEach(r=>{
     const conf=MNE_ROOMS[r.id];
     const items=MnEState.items(r.id);
     if(!conf && !items.length) return;
+    const roomCost=items.reduce((s,it)=>s+(it.cost||0)*(it.qty||1),0);
     const panel=el("div","mne-room");
     const ready = conf? conf.readyToSell : null;
     const readyBadge = ready===true?`<span class="rs-badge rs-yes">✓ Ready to sell</span>`
@@ -1360,6 +1405,7 @@ function renderMnE(v){
     panel.innerHTML=`<div class="mne-head">
         <h3>${r.name} <span class="mne-m2">${r.m2} m²</span></h3>
         ${readyBadge}
+        ${roomCost?`<span class="room-cost">${money(Math.round(roomCost))}</span>`:""}
         <button class="btn sm mne-add" data-room="${r.id}">+ Item</button>
       </div>
       ${conf&&conf.currentAV?`<div class="mne-current">Current AV: ${conf.currentAV}</div>`:""}
@@ -1376,15 +1422,18 @@ function renderMnEItems(roomId){
   const items=MnEState.items(roomId);
   if(!items.length){ box.innerHTML=`<div class="qs-sub" style="padding:8px 0">No items yet — add what this room needs.</div>`; return; }
   box.innerHTML=`<table class="mne-table">
-    <tr><th>Item</th><th>Cat</th><th>Size</th><th>Qty</th><th>Status</th><th></th></tr>`+
-    items.map((it,i)=>`<tr>
+    <tr><th>Item</th><th>Cat</th><th>Size</th><th>Qty</th><th>Unit cost</th><th>Line</th><th>Supplier</th><th>Status</th><th></th></tr>`+
+    items.map((it,i)=>{ const line=(it.cost||0)*(it.qty||1);
+      return `<tr>
       <td>${it.item}</td><td><span class="cat-pill">${it.cat}</span></td>
       <td>${it.size||"—"}</td><td>${it.qty}</td>
+      <td>${it.cost?money(it.cost):"—"}</td><td>${line?money(Math.round(line)):"—"}</td>
+      <td>${it.supplier||"—"}</td>
       <td><select class="mne-status ${it.status}" data-room="${roomId}" data-i="${i}">
         ${MNE_STATUSES.map(s=>`<option value="${s}" ${it.status===s?"selected":""}>${s.charAt(0).toUpperCase()+s.slice(1)}</option>`).join("")}
       </select></td>
       <td><button class="mne-del" data-room="${roomId}" data-i="${i}" title="Remove">×</button></td>
-    </tr>`).join("")+`</table>`;
+    </tr>`;}).join("")+`</table>`;
   box.querySelectorAll(".mne-status").forEach(sel=>sel.onchange=()=>{
     MnEState.setStatus(sel.dataset.room, +sel.dataset.i, sel.value); render(); });
   box.querySelectorAll(".mne-del").forEach(b=>b.onclick=()=>{
@@ -1398,6 +1447,8 @@ function openMnEItemForm(roomId){
     <div><label>Item</label><input id="mi-item" placeholder="e.g. 4K Smart TV"></div>
     <div><label>Size (screens)</label><select id="mi-size"><option value="">N/A</option>${sizes.map(s=>`<option>${s}</option>`).join("")}</select></div>
     <div><label>Quantity</label><input id="mi-qty" type="number" min="1" value="1"></div>
+    <div><label>Unit cost (£)</label><input id="mi-cost" type="number" min="0" step="0.01" placeholder="0"></div>
+    <div><label>Supplier</label><input id="mi-supplier" placeholder="e.g. AV Partner Ltd"></div>
     <div><label>Status</label><select id="mi-status">${MNE_STATUSES.map(s=>`<option value="${s}">${s.charAt(0).toUpperCase()+s.slice(1)}</option>`).join("")}</select></div>
   </div>
   <div style="margin-top:18px"><button class="btn" id="mi-save">Add item</button></div>`;
@@ -1405,7 +1456,8 @@ function openMnEItemForm(roomId){
   $("#mi-save").onclick=()=>{
     const item=$("#mi-item").value.trim(); if(!item){ $("#mi-item").focus(); return; }
     MnEState.add(roomId,{ cat:$("#mi-cat").value, item, size:$("#mi-size").value,
-      qty:parseInt($("#mi-qty").value)||1, status:$("#mi-status").value });
+      qty:parseInt($("#mi-qty").value)||1, cost:parseFloat($("#mi-cost").value)||0,
+      supplier:$("#mi-supplier").value.trim(), status:$("#mi-status").value });
     closeModal(); render();
   };
 }
