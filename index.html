@@ -8,10 +8,12 @@
 <link rel="manifest" href="manifest.json">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Inter:wght@400;500;600&family=Lato:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
 <style>
 :root{
   --navy:#1a2b47; --navy-dk:#101d33; --navy-lt:#2d4569;
+  --brand-navy:#2C3E50; --brand-orange:#AB3C0C; --brand-beige:#EDF1EB;
+  --brand-sans:'Lato',system-ui,sans-serif;
   --gold:#BB9979; --gold-dk:#9d7d5f; --gold-soft:#e8dccf;
   --rust:#9b320f; --rust-lt:#b8481f;
   --ink:#1a2230; --ink-2:#3a4256; --paper:#f7f8fa; --line:#e3e7ee;
@@ -368,32 +370,37 @@ main{flex:1;padding:24px 20px 60px;max-width:1180px;margin:0 auto;width:100%}
 #soc-result,#soc-desc{width:100%;padding:11px;border:1px solid var(--line);border-radius:9px;background:var(--paper);font-size:14px;resize:vertical}
 
 /* ---------- HOME / WELCOME ---------- */
-.home-hero{background:linear-gradient(135deg,var(--navy),var(--navy-dk));border-radius:16px;padding:34px 32px;color:#fff;margin-bottom:18px;position:relative;overflow:hidden}
-.home-hero::after{content:"";position:absolute;top:-40px;right:-30px;width:200px;height:200px;border-radius:50%;background:rgba(187,153,121,.14)}
+body.home-active nav.tabs{display:none;}
+.home-hero{background:linear-gradient(135deg,var(--brand-navy),#1d2b3a);border-radius:18px;padding:40px 38px;color:#fff;margin-bottom:20px;position:relative;overflow:hidden;font-family:var(--brand-sans)}
+.home-hero::after{content:"";position:absolute;top:-60px;right:-40px;width:260px;height:260px;border-radius:50%;background:rgba(171,60,12,.16)}
+.home-hero::before{content:"";position:absolute;bottom:-80px;left:30%;width:200px;height:200px;border-radius:50%;background:rgba(237,241,235,.06)}
 .hh-inner{position:relative;z-index:2}
-.hh-eyebrow{font-size:12px;letter-spacing:3px;text-transform:uppercase;color:var(--gold-soft)}
-.hh-title{font-family:var(--serif);font-size:34px;font-weight:600;margin:4px 0 2px}
-.hh-sub{font-size:15px;color:#d8dfe9}
-.hh-meta{font-size:12.5px;color:#9aa8bd;margin-top:10px}
-.home-quickstats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:22px}
-.hq{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;box-shadow:var(--shadow)}
+.hh-eyebrow{font-size:12px;letter-spacing:4px;text-transform:uppercase;color:var(--brand-orange);font-weight:700}
+.hh-title{font-family:var(--serif);font-size:40px;font-weight:600;margin:6px 0 4px;letter-spacing:.3px}
+.hh-sub{font-size:16px;color:#dbe2ea;font-family:var(--brand-sans)}
+.hh-meta{font-size:13px;color:#9fb0c2;margin-top:12px;font-family:var(--brand-sans)}
+.home-quickstats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:26px}
+.hq{background:#fff;border:1px solid var(--brand-beige);border-radius:14px;padding:18px 20px;box-shadow:0 2px 10px rgba(44,62,80,.06);font-family:var(--brand-sans)}
 .hq.alert{border-color:#f0d9bf;background:#fdf6ee}
-.hq-v{display:block;font-family:var(--serif);font-size:26px;font-weight:600;color:var(--navy)}
-.hq.alert .hq-v{color:var(--warn)}
-.hq-k{font-size:12px;color:var(--muted)}
-.home-section{margin-bottom:22px}
-.hs-head{display:flex;align-items:center;gap:12px;margin-bottom:12px;padding-left:2px}
-.hs-ico{font-size:24px;width:44px;height:44px;border-radius:11px;display:grid;place-items:center;background:var(--sc,#1a2b47);filter:saturate(.9)}
-.hs-label{font-family:var(--serif);font-size:20px;font-weight:600;line-height:1.1}
-.hs-desc{font-size:12.5px;color:var(--muted)}
-.home-tiles{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
-.home-tile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
-  background:var(--card);border:1px solid var(--line);border-radius:12px;padding:22px 14px;box-shadow:var(--shadow);
-  transition:.18s;cursor:pointer;text-align:center}
-.home-tile:hover{transform:translateY(-3px);border-color:var(--gold);box-shadow:0 6px 20px rgba(26,43,71,.12)}
-.ht-ico{font-size:28px}
-.ht-label{font-size:13.5px;font-weight:600;color:var(--ink)}
-@media(max-width:600px){.home-quickstats{grid-template-columns:1fr}}
+.hq-v{display:block;font-family:var(--serif);font-size:30px;font-weight:600;color:var(--brand-navy)}
+.hq.alert .hq-v{color:var(--brand-orange)}
+.hq-k{font-size:12.5px;color:#7a8896;letter-spacing:.3px}
+.home-section{margin-bottom:26px}
+.hs-head{display:flex;align-items:center;gap:14px;margin-bottom:14px;padding-bottom:12px;border-bottom:2px solid var(--brand-beige)}
+.hs-ico{font-size:22px;width:46px;height:46px;border-radius:12px;display:grid;place-items:center;background:var(--brand-navy);color:#fff}
+.hs-label{font-family:var(--serif);font-size:22px;font-weight:600;line-height:1.1;color:var(--brand-navy)}
+.hs-desc{font-size:12.5px;color:#7a8896;font-family:var(--brand-sans)}
+.home-tiles{display:grid;gap:14px;grid-template-columns:repeat(4,1fr)}
+.home-tile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
+  background:#fff;border:1px solid var(--brand-beige);border-radius:14px;padding:26px 16px;
+  box-shadow:0 2px 10px rgba(44,62,80,.05);transition:.18s;cursor:pointer;text-align:center;position:relative;overflow:hidden;font-family:var(--brand-sans)}
+.home-tile::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:var(--brand-orange);transform:scaleX(0);transition:.2s;transform-origin:left}
+.home-tile:hover{transform:translateY(-3px);border-color:var(--brand-navy);box-shadow:0 8px 24px rgba(44,62,80,.14)}
+.home-tile:hover::before{transform:scaleX(1)}
+.ht-ico{font-size:30px}
+.ht-label{font-size:14px;font-weight:700;color:var(--brand-navy);letter-spacing:.2px}
+@media(max-width:900px){.home-tiles{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:680px){.home-tiles{grid-template-columns:repeat(2,1fr)}.home-quickstats{grid-template-columns:1fr}}
 
 /* ---------- CORPORATE RATE PLANNER ---------- */
 .corp-candidates{background:linear-gradient(135deg,#eef5ec,#e4f0e2);border:1px solid #cfe0ca;border-radius:12px;padding:18px;margin-bottom:18px}
@@ -693,7 +700,7 @@ main{flex:1;padding:24px 20px 60px;max-width:1180px;margin:0 auto;width:100%}
 <!-- ================= APP ================= -->
 <div id="app" class="hidden">
   <header class="topbar">
-    <div class="brand"><img src="assets/bh-logo.svg" alt=""> Brandon Hall</div>
+    <div class="brand" id="brand-home" style="cursor:pointer" title="Home"><img src="assets/bh-logo.svg" alt=""> Brandon Hall</div>
     <div class="loc" id="tb-loc">Brandon Hall · Coventry</div>
     <div class="spacer"></div>
     <div class="who">Signed in as <b id="tb-who">—</b> <span id="tb-mode" class="mode-badge">Demo</span></div>

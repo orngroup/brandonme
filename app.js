@@ -70,6 +70,7 @@ function enterApp(user){
   $("#app").classList.remove("hidden");
   $("#tb-who").textContent=user.name;
   const badge=$("#tb-mode"); if(badge) badge.textContent = FB.ready? "Live" : "Demo";
+  const bh=$("#brand-home"); if(bh) bh.onclick=()=>switchTab("home");
   boot();
 }
 $("#lg-pw").addEventListener("keydown",e=>{ if(e.key==="Enter")$("#lg-btn").click(); });
@@ -125,6 +126,7 @@ async function boot(){
 }
 function render(){
   const v=$("#view"); v.innerHTML="";
+  document.body.classList.toggle("home-active", CURRENT_TAB==="home");
   ({home:renderHome, rooms:renderRooms, dining:renderDining, pipeline:renderPipeline, corprates:renderCorpRates, packages:renderPackages, suppliers:renderSuppliers, quote:renderQuote,
     profit:renderProfit, chat:renderChat, mne:renderMnE, marketing:renderMarketing, social:renderSocial, menu:renderMenuBuilder, brochure:renderBrochureBuilder, admin:renderAdmin }[CURRENT_TAB]||renderRooms)(v);
 }
