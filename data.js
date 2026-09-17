@@ -826,3 +826,54 @@ const BROCHURE_TEMPLATES = {
     ratesNote:"Corporate rates are agreed on application and subject to a minimum annual room-night commitment."
   }
 };
+
+/* ============================================================
+   PORTAL HOME — grouped sections + role-based access
+   ============================================================ */
+const PORTAL_SECTIONS = [
+  { id:"branding", label:"Branding & Marketing", icon:"🎨", colour:"#BB9979",
+    desc:"Brand assets, content library and social media",
+    tabs:["marketing","social"] },
+  { id:"commercial", label:"Commercial", icon:"📈", colour:"#1a2b47",
+    desc:"Pipeline, corporate rates and profitability",
+    tabs:["pipeline","corprates","profit"] },
+  { id:"collateral", label:"Collateral", icon:"📄", colour:"#4a7c59",
+    desc:"Quotes, brochures and menus",
+    tabs:["quote","brochure","menu"] },
+  { id:"venue", label:"Venue & Spaces", icon:"🏛️", colour:"#7a9bc4",
+    desc:"Rooms, dining, packages and suppliers",
+    tabs:["rooms","dining","packages","suppliers"] },
+  { id:"weddings-events", label:"Weddings & Events", icon:"💍", colour:"#c9814f",
+    desc:"Events chat and enquiry capture",
+    tabs:["chat"] },
+  { id:"operational", label:"Operational Tools", icon:"🔧", colour:"#9d7d5f",
+    desc:"M&E upgrade tracker and admin",
+    tabs:["mne","admin"] }
+];
+
+/* Tab metadata for tiles (label + one-line) */
+const TAB_META = {
+  rooms:{label:"Rooms",icon:"🚪"}, dining:{label:"Dining & Bars",icon:"🍽️"},
+  pipeline:{label:"Sales Pipeline",icon:"📊"}, corprates:{label:"Corporate Rates",icon:"💷"},
+  packages:{label:"Packages",icon:"📦"}, suppliers:{label:"Suppliers",icon:"🤝"},
+  quote:{label:"Create Quote",icon:"🧾"}, profit:{label:"Profit Tool",icon:"💰"},
+  chat:{label:"Events Chat",icon:"💬"}, mne:{label:"M&E Upgrade",icon:"🖥️"},
+  marketing:{label:"Marketing Library",icon:"🖼️"}, menu:{label:"Menu Builder",icon:"📝"},
+  brochure:{label:"Brochure Builder",icon:"📕"}, social:{label:"Social Studio",icon:"📱"},
+  admin:{label:"Admin",icon:"⚙️"}
+};
+
+/* Role-based access. Everyone sees "all" by default; restrict per user here.
+   Set a user's `sections` to an array of section ids to limit them. */
+const ROLE_ACCESS = {
+  "ajay.kawa":         "all",
+  "raj.kumar":         "all",
+  "alia.taub":         "all",
+  "nicola.cartwright": "all"
+  // e.g. limit someone: "front.office": ["venue","operational"]
+};
+function userSections(userKey){
+  const acc=ROLE_ACCESS[userKey]||"all";
+  if(acc==="all") return PORTAL_SECTIONS;
+  return PORTAL_SECTIONS.filter(s=>acc.includes(s.id));
+}

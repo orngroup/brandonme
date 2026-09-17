@@ -44,7 +44,7 @@ const Store = {
   }
 };
 
-let SESSION=null, CURRENT_TAB="rooms";
+let SESSION=null, CURRENT_TAB="home";
 
 /* ============================================================ AUTH */
 $("#lg-btn").onclick = async ()=>{
@@ -58,12 +58,12 @@ $("#lg-btn").onclick = async ()=>{
   // Try Firebase first; fall back to demo (local) auth
   if(FB.ready){
     const r=await fbSignIn(u, pw);
-    if(r.ok){ SESSION=user; enterApp(user); btn.disabled=false; btn.textContent=label; return; }
+    if(r.ok){ SESSION=user; SESSION._key=u; enterApp(user); btn.disabled=false; btn.textContent=label; return; }
     if(!r.demo){ err.textContent=r.error||"Sign-in failed."; btn.disabled=false; btn.textContent=label; return; }
   }
   // demo fallback
   if(pw!==user.code){ err.textContent="Incorrect access code."; btn.disabled=false; btn.textContent=label; return; }
-  SESSION=user; enterApp(user); btn.disabled=false; btn.textContent=label;
+  SESSION=user; SESSION._key=u; enterApp(user); btn.disabled=false; btn.textContent=label;
 };
 function enterApp(user){
   $("#login").classList.add("hidden");
@@ -125,8 +125,8 @@ async function boot(){
 }
 function render(){
   const v=$("#view"); v.innerHTML="";
-  ({rooms:renderRooms, dining:renderDining, pipeline:renderPipeline, corprates:renderCorpRates, packages:renderPackages, suppliers:renderSuppliers, quote:renderQuote,
-    profit:renderProfit, chat:renderChat, mne:renderMnE, marketing:renderMarketing, menu:renderMenuBuilder, brochure:renderBrochureBuilder, admin:renderAdmin }[CURRENT_TAB]||renderRooms)(v);
+  ({home:renderHome, rooms:renderRooms, dining:renderDining, pipeline:renderPipeline, corprates:renderCorpRates, packages:renderPackages, suppliers:renderSuppliers, quote:renderQuote,
+    profit:renderProfit, chat:renderChat, mne:renderMnE, marketing:renderMarketing, social:renderSocial, menu:renderMenuBuilder, brochure:renderBrochureBuilder, admin:renderAdmin }[CURRENT_TAB]||renderRooms)(v);
 }
 
 /* ============================================================ ROOMS */
@@ -1903,6 +1903,7 @@ function renderMenuCourses(){
       const row=el("div","mc-item");
       row.innerHTML=`<input class="mi-name" data-ci="${ci}" data-ii="${ii}" value="${(it.name||'').replace(/"/g,'&quot;')}" placeholder="Dish name">
         <input class="mi-desc" data-ci="${ci}" data-ii="${ii}" value="${(it.desc||'').replace(/"/g,'&quot;')}" placeholder="Description (optional)">
+        <input class="mi-price" data-ci="${ci}" data-ii="${ii}" value="${(it.price||'').replace(/"/g,'&quot;')}" placeholder="£">
         <button class="mi-del" data-ci="${ci}" data-ii="${ii}">×</button>`;
       itemsBox.appendChild(row);
     });
@@ -1913,6 +1914,7 @@ function renderMenuCourses(){
   box.querySelectorAll(".mc-additem").forEach(b=>b.onclick=()=>{ MENU.courses[+b.dataset.ci].items.push({name:"",desc:""}); renderMenuCourses(); renderMenuPreview(); });
   box.querySelectorAll(".mi-name").forEach(i=>i.oninput=e=>{ MENU.courses[+e.target.dataset.ci].items[+e.target.dataset.ii].name=e.target.value; renderMenuPreview(); });
   box.querySelectorAll(".mi-desc").forEach(i=>i.oninput=e=>{ MENU.courses[+e.target.dataset.ci].items[+e.target.dataset.ii].desc=e.target.value; renderMenuPreview(); });
+  box.querySelectorAll(".mi-price").forEach(i=>i.oninput=e=>{ MENU.courses[+e.target.dataset.ci].items[+e.target.dataset.ii].price=e.target.value; renderMenuPreview(); });
   box.querySelectorAll(".mi-del").forEach(b=>b.onclick=()=>{ MENU.courses[+b.dataset.ci].items.splice(+b.dataset.ii,1); renderMenuCourses(); renderMenuPreview(); });
 }
 function renderMenuPreview(){
@@ -1924,7 +1926,7 @@ function renderMenuPreview(){
     ${MENU.subtitle?`<div class="mp-subtitle">${MENU.subtitle}</div>`:""}
     ${MENU.courses.map(c=>`
       ${c.items.filter(i=>i.name).length?`<div class="mp-course">${c.name}</div>`:""}
-      ${c.items.filter(i=>i.name).map(i=>`<div class="mp-dish"><span class="mp-dn">${i.name}</span>${i.desc?`<span class="mp-dd">${i.desc}</span>`:""}</div>`).join("")}
+      ${c.items.filter(i=>i.name).map(i=>`<div class="mp-dish"><span class="mp-dn">${i.name}${i.price?`<span class="mp-dp">${i.price}</span>`:""}</span>${i.desc?`<span class="mp-dd">${i.desc}</span>`:""}</div>`).join("")}
     `).join("")}
     ${MENU.price?`<div class="mp-price">${MENU.price}</div>`:""}
     ${MENU.footer?`<div class="mp-footer">${MENU.footer}</div>`:""}`;
@@ -1933,7 +1935,7 @@ function printMenu(){
   const win=window.open("","_blank");
   const courses=MENU.courses.map(c=>{
     const items=c.items.filter(i=>i.name); if(!items.length)return"";
-    return `<div class="course">${c.name}</div>`+items.map(i=>`<div class="dish"><div class="dn">${i.name}</div>${i.desc?`<div class="dd">${i.desc}</div>`:""}</div>`).join("");
+    return `<div class="course">${c.name}</div>`+items.map(i=>`<div class="dish"><div class="dn">${i.name}${i.price?`<span class="dp">${i.price}</span>`:""}</div>${i.desc?`<div class="dd">${i.desc}</div>`:""}</div>`).join("");
   }).join("");
   win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${MENU.title}</title>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Inter:wght@400;500&display=swap" rel="stylesheet">
@@ -1949,6 +1951,7 @@ function printMenu(){
     .course::before,.course::after{content:"";position:absolute;top:50%;width:40px;height:1px;background:#e0d5c5}
     .course::before{left:calc(50% - 90px)}.course::after{right:calc(50% - 90px)}
     .dish{margin-bottom:14px}.dn{font-family:'Cormorant Garamond',serif;font-size:16px;color:#1a2230}
+    .dn .dp{color:#9d7d5f;font-size:14px;margin-left:8px}
     .dd{font-size:12px;color:#7a8494;font-style:italic;margin-top:2px}
     .price{font-family:'Cormorant Garamond',serif;font-size:20px;color:#1a2b47;margin:28px 0 0;font-weight:600}
     .footer{font-size:9.5px;color:#9aa2ad;margin-top:34px;border-top:1px solid #e8dccf;padding-top:14px;line-height:1.5}</style>
@@ -2306,6 +2309,163 @@ function produceBrochurePDF(){
     </div>
     <script>window.onload=()=>setTimeout(()=>window.print(),500)<\/script></body></html>`);
   win.document.close();
+}
+
+/* ============================================================ SOCIAL STUDIO (paste-based, no cost) */
+let SOCIAL_IMG=null; // { dataUrl, file }
+function renderSocial(v){
+  v.appendChild(head("Social Studio","Upload an image and describe your post. We build a ready-to-use prompt — paste it into Claude or ChatGPT, then drop the result back to format it."));
+
+  const help=el("div","help-box");
+  help.innerHTML=`<button class="help-toggle" id="soc-help-t">💡 How this works (no cost)</button>
+    <div class="help-body hidden" id="soc-help-b">
+      <p><b>1.</b> Upload your image and describe what it shows and what you're promoting.</p>
+      <p><b>2.</b> Click <b>Build prompt</b> — we write a detailed brief in Brandon Hall's voice.</p>
+      <p><b>3.</b> Click <b>Copy</b>, then paste it into <a href="https://claude.ai" target="_blank">Claude.ai</a> or ChatGPT (attach the image too if you like) and send.</p>
+      <p><b>4.</b> Paste the caption + hashtags it gives you back into the box below to preview and copy your finished post alongside the image.</p>
+      <p>No API key, no cost — uses the Claude/ChatGPT login your team already has.</p>
+    </div>`;
+  v.appendChild(help);
+  $("#soc-help-t").onclick=()=>$("#soc-help-b").classList.toggle("hidden");
+
+  const wrap=el("div","quote-layout");
+  // left: inputs
+  const left=el("div","quote-panel");
+  left.innerHTML=`<h3>1 · Your post</h3>
+    <div class="soc-drop" id="soc-drop">
+      <input type="file" id="soc-file" accept="image/*" hidden>
+      <div id="soc-dropinner"><span class="soc-dropico">📷</span><div>Click to upload an image</div><div class="qs-sub">or drag &amp; drop</div></div>
+    </div>
+    <div style="margin-top:14px"><label>What's in the image? What are you promoting?</label>
+      <textarea id="soc-desc" rows="4" placeholder="e.g. Photo of our spa pool at sunset. We want to promote midweek spa days — £45 including lunch and full use of the leisure facilities."></textarea></div>
+    <div class="form-grid" style="margin-top:12px">
+      <div><label>Tone</label><select id="soc-tone">
+        <option>Warm &amp; welcoming</option><option>Elegant &amp; refined</option><option>Fun &amp; upbeat</option><option>Informative</option><option>Luxury</option></select></div>
+      <div><label>Platform</label><select id="soc-platform">
+        <option>Instagram / Facebook</option><option>LinkedIn</option><option>X / Twitter</option><option>Any platform</option></select></div>
+      <div class="full"><label>Call to action</label><input id="soc-cta" placeholder="e.g. Book now / Link in bio"></div>
+    </div>
+    <div style="margin-top:16px"><button class="btn" id="soc-build">Build prompt</button></div>
+    <div id="soc-promptbox"></div>`;
+  wrap.appendChild(left);
+
+  // right: paste result + preview
+  const right=el("div","quote-panel");
+  right.innerHTML=`<h3>2 · Paste the result</h3>
+    <p class="qs-sub" style="margin-bottom:8px">Paste what Claude/ChatGPT gives you here:</p>
+    <textarea id="soc-result" rows="5" placeholder="Paste the generated caption and hashtags here…"></textarea>
+    <div id="soc-preview" class="soc-preview" style="margin-top:14px"></div>`;
+  wrap.appendChild(right);
+  v.appendChild(wrap);
+
+  // upload wiring
+  const drop=$("#soc-drop"), file=$("#soc-file");
+  drop.onclick=()=>file.click();
+  file.onchange=e=>handleSocialImage(e.target.files[0]);
+  drop.ondragover=e=>{ e.preventDefault(); drop.classList.add("drag"); };
+  drop.ondragleave=()=>drop.classList.remove("drag");
+  drop.ondrop=e=>{ e.preventDefault(); drop.classList.remove("drag"); if(e.dataTransfer.files[0]) handleSocialImage(e.dataTransfer.files[0]); };
+  $("#soc-build").onclick=buildSocialPrompt;
+  $("#soc-result").addEventListener("input",renderSocialPreview);
+}
+function handleSocialImage(f){
+  if(!f || !f.type.startsWith("image/"))return;
+  const reader=new FileReader();
+  reader.onload=e=>{ SOCIAL_IMG={ dataUrl:e.target.result, file:f };
+    $("#soc-dropinner").innerHTML=`<img src="${e.target.result}" class="soc-thumb"><div class="qs-sub">${f.name} · click to change</div>`;
+    renderSocialPreview();
+  };
+  reader.readAsDataURL(f);
+}
+function buildSocialPrompt(){
+  const desc=$("#soc-desc").value.trim();
+  const box=$("#soc-promptbox");
+  if(!desc){ box.innerHTML=`<div class="qs-sub" style="color:var(--warn);margin-top:10px">Please describe the image and what you're promoting.</div>`; return; }
+  const tone=$("#soc-tone").value, platform=$("#soc-platform").value, cta=$("#soc-cta").value.trim();
+  const prompt=`Write a social media post for Brandon Hall Hotel & Spa — a 4-star country-house hotel and spa set in 17 acres of Warwickshire grounds near Coventry (CV8 3FW), offering weddings, meetings & events, a spa with an 18-metre pool, restaurant and bar, and 120 en-suite bedrooms.
+
+Voice: ${tone.toLowerCase()}, with a touch of understated luxury — warm and genuine, never gimmicky. British English.
+
+Platform: ${platform}.
+
+What's in the image / what we're promoting:
+${desc}
+${cta?`\nPreferred call to action: ${cta}`:""}
+
+Please provide:
+1. A concise, engaging caption (2–4 short sentences) ending with a natural call to action.
+2. A line of 8–12 relevant hashtags mixing brand, location and topic (e.g. #BrandonHall #WarwickshireWeddings #CoventryHotel #SpaDay).
+
+${SOCIAL_IMG?"(An image is attached — please reference what's actually shown.)":""}`;
+  box.innerHTML=`<div class="soc-prompt" id="soc-prompt">${prompt.replace(/</g,"&lt;")}</div>
+    <div class="dual-btn" style="margin-top:10px">
+      <button class="btn" id="soc-copyprompt">Copy prompt</button>
+      <a class="btn ghost" href="https://claude.ai/new" target="_blank" style="text-align:center;text-decoration:none">Open Claude ↗</a>
+    </div>
+    ${SOCIAL_IMG?`<p class="qs-sub" style="margin-top:8px">Tip: attach your image in Claude/ChatGPT too, so it can describe what's actually in the photo.</p>`:""}`;
+  $("#soc-copyprompt").onclick=()=>{ navigator.clipboard?.writeText(prompt); $("#soc-copyprompt").textContent="Copied ✓";
+    setTimeout(()=>{ if($("#soc-copyprompt")) $("#soc-copyprompt").textContent="Copy prompt"; },1500); };
+}
+function renderSocialPreview(){
+  const prev=$("#soc-preview"); if(!prev)return;
+  const result=($("#soc-result")?.value||"").trim();
+  if(!result && !SOCIAL_IMG){ prev.innerHTML=""; return; }
+  // split hashtags (last line/block starting with #) from caption
+  let caption=result, tags="";
+  const m=result.match(/((?:#[^\s#]+\s*)+)\s*$/);
+  if(m){ tags=m[1].trim(); caption=result.slice(0,m.index).trim(); }
+  prev.innerHTML=`
+    ${SOCIAL_IMG?`<img src="${SOCIAL_IMG.dataUrl}" class="soc-outimg">`:""}
+    ${caption?`<div class="soc-caption">${caption.replace(/\n/g,"<br>")}</div>`:""}
+    ${tags?`<div class="soc-tags">${tags}</div>`:""}
+    ${(caption||tags)?`<div class="dual-btn" style="margin-top:14px"><button class="btn" id="soc-copyfinal">Copy caption + tags</button></div>`:""}`;
+  if($("#soc-copyfinal")) $("#soc-copyfinal").onclick=()=>{ navigator.clipboard?.writeText(result);
+    $("#soc-copyfinal").textContent="Copied ✓"; setTimeout(()=>{ if($("#soc-copyfinal")) $("#soc-copyfinal").textContent="Copy caption + tags"; },1500); };
+}
+
+/* ============================================================ HOME / WELCOME */
+function renderHome(v){
+  const name=SESSION?.name?.split(" ")[0]||"there";
+  const hour=new Date().getHours();
+  const greet=hour<12?"Good morning":hour<18?"Good afternoon":"Good evening";
+  const hero=el("div","home-hero");
+  hero.innerHTML=`<div class="hh-inner">
+    <div class="hh-eyebrow">${greet}</div>
+    <h2 class="hh-title">Hello ${name} 👋</h2>
+    <p class="hh-sub">Welcome to the Brandon Hall Hotel &amp; Spa Management Portal.</p>
+    <p class="hh-meta">${new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</p>
+  </div>`;
+  v.appendChild(hero);
+
+  // quick stats (from pipeline)
+  const pipe=(typeof pipelineData==="function")?pipelineData():[];
+  if(pipe.length){
+    const open=pipe.filter(e=>["enquiry","provisional"].includes(e.status));
+    const openVal=open.reduce((s,e)=>s+(e.value||0),0);
+    const today=new Date().toISOString().slice(0,10);
+    const followUps=pipe.filter(e=>e.followUp && e.followUp<=today && ["enquiry","provisional"].includes(e.status)).length;
+    const qs=el("div","home-quickstats");
+    qs.innerHTML=`
+      <div class="hq"><span class="hq-v">${money(Math.round(openVal))}</span><span class="hq-k">Open pipeline</span></div>
+      <div class="hq"><span class="hq-v">${open.length}</span><span class="hq-k">Open opportunities</span></div>
+      <div class="hq ${followUps?'alert':''}"><span class="hq-v">${followUps}</span><span class="hq-k">Follow-ups due</span></div>`;
+    v.appendChild(qs);
+  }
+
+  // sections
+  const sections=userSections(SESSION?._key||"ajay.kawa");
+  sections.forEach(sec=>{
+    const block=el("div","home-section");
+    const tiles=sec.tabs.map(t=>{ const m=TAB_META[t]; if(!m)return"";
+      return `<button class="home-tile" data-go="${t}"><span class="ht-ico">${m.icon}</span><span class="ht-label">${m.label}</span></button>`;
+    }).join("");
+    block.innerHTML=`<div class="hs-head" style="--sc:${sec.colour}">
+        <span class="hs-ico">${sec.icon}</span>
+        <div><div class="hs-label">${sec.label}</div><div class="hs-desc">${sec.desc}</div></div></div>
+      <div class="home-tiles">${tiles}</div>`;
+    v.appendChild(block);
+  });
+  v.querySelectorAll(".home-tile").forEach(b=>b.onclick=()=>switchTab(b.dataset.go));
 }
 
 /* ============================================================ HELPERS */

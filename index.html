@@ -335,6 +335,7 @@ main{flex:1;padding:24px 20px 60px;max-width:1180px;margin:0 auto;width:100%}
 .mc-item{display:flex;gap:6px;margin-bottom:6px}
 .mi-name{flex:1;padding:6px 9px;border:1px solid var(--line);border-radius:6px;background:#fff}
 .mi-desc{flex:1.3;padding:6px 9px;border:1px solid var(--line);border-radius:6px;background:#fff;font-size:12px}
+.mi-price{width:64px;padding:6px 9px;border:1px solid var(--line);border-radius:6px;background:#fff;text-align:center}
 .mi-del{width:26px;border-radius:5px;background:#fff;border:1px solid var(--line);color:var(--muted)}
 .mi-del:hover{background:#f0e3e3;color:#b3261e}
 .mc-additem{font-size:12px;color:var(--gold-dk);font-weight:600;padding:4px 0;background:none}
@@ -348,9 +349,51 @@ main{flex:1;padding:24px 20px 60px;max-width:1180px;margin:0 auto;width:100%}
   letter-spacing:1.5px;margin:18px 0 8px}
 .mp-dish{margin-bottom:9px}
 .mp-dn{font-family:var(--serif);font-size:15px;color:var(--ink);display:block}
+.mp-dp{color:var(--gold-dk);font-size:13px;margin-left:6px}
 .mp-dd{font-size:11.5px;color:var(--muted);font-style:italic}
 .mp-price{font-family:var(--serif);font-size:17px;color:var(--navy);font-weight:600;margin-top:18px}
 .mp-footer{font-size:9.5px;color:var(--muted);margin-top:20px;border-top:1px solid var(--gold-soft);padding-top:10px;line-height:1.5}
+
+/* ---------- SOCIAL STUDIO ---------- */
+.soc-drop{border:2px dashed var(--line);border-radius:12px;padding:28px;text-align:center;cursor:pointer;transition:.15s;background:var(--paper)}
+.soc-drop:hover,.soc-drop.drag{border-color:var(--gold);background:#fdfbf8}
+.soc-dropico{font-size:34px;display:block;margin-bottom:6px}
+.soc-thumb{max-width:100%;max-height:180px;border-radius:8px;margin-bottom:8px}
+.soc-preview{min-height:200px}
+.soc-outimg{width:100%;border-radius:10px;margin-bottom:14px}
+.soc-caption{font-size:14.5px;line-height:1.6;white-space:pre-wrap;background:var(--paper);border-radius:10px;padding:14px 16px}
+.soc-tags{font-size:13px;color:var(--gold-dk);margin-top:10px;line-height:1.7;font-weight:500}
+.soc-loading{text-align:center;padding:40px 0;color:var(--muted);font-size:15px}
+.soc-prompt{background:var(--navy-dk);color:#dde4ef;border-radius:10px;padding:14px 16px;font-size:12.5px;line-height:1.55;white-space:pre-wrap;margin-top:12px;max-height:240px;overflow-y:auto}
+#soc-result,#soc-desc{width:100%;padding:11px;border:1px solid var(--line);border-radius:9px;background:var(--paper);font-size:14px;resize:vertical}
+
+/* ---------- HOME / WELCOME ---------- */
+.home-hero{background:linear-gradient(135deg,var(--navy),var(--navy-dk));border-radius:16px;padding:34px 32px;color:#fff;margin-bottom:18px;position:relative;overflow:hidden}
+.home-hero::after{content:"";position:absolute;top:-40px;right:-30px;width:200px;height:200px;border-radius:50%;background:rgba(187,153,121,.14)}
+.hh-inner{position:relative;z-index:2}
+.hh-eyebrow{font-size:12px;letter-spacing:3px;text-transform:uppercase;color:var(--gold-soft)}
+.hh-title{font-family:var(--serif);font-size:34px;font-weight:600;margin:4px 0 2px}
+.hh-sub{font-size:15px;color:#d8dfe9}
+.hh-meta{font-size:12.5px;color:#9aa8bd;margin-top:10px}
+.home-quickstats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:22px}
+.hq{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;box-shadow:var(--shadow)}
+.hq.alert{border-color:#f0d9bf;background:#fdf6ee}
+.hq-v{display:block;font-family:var(--serif);font-size:26px;font-weight:600;color:var(--navy)}
+.hq.alert .hq-v{color:var(--warn)}
+.hq-k{font-size:12px;color:var(--muted)}
+.home-section{margin-bottom:22px}
+.hs-head{display:flex;align-items:center;gap:12px;margin-bottom:12px;padding-left:2px}
+.hs-ico{font-size:24px;width:44px;height:44px;border-radius:11px;display:grid;place-items:center;background:var(--sc,#1a2b47);filter:saturate(.9)}
+.hs-label{font-family:var(--serif);font-size:20px;font-weight:600;line-height:1.1}
+.hs-desc{font-size:12.5px;color:var(--muted)}
+.home-tiles{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
+.home-tile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+  background:var(--card);border:1px solid var(--line);border-radius:12px;padding:22px 14px;box-shadow:var(--shadow);
+  transition:.18s;cursor:pointer;text-align:center}
+.home-tile:hover{transform:translateY(-3px);border-color:var(--gold);box-shadow:0 6px 20px rgba(26,43,71,.12)}
+.ht-ico{font-size:28px}
+.ht-label{font-size:13.5px;font-weight:600;color:var(--ink)}
+@media(max-width:600px){.home-quickstats{grid-template-columns:1fr}}
 
 /* ---------- CORPORATE RATE PLANNER ---------- */
 .corp-candidates{background:linear-gradient(135deg,#eef5ec,#e4f0e2);border:1px solid #cfe0ca;border-radius:12px;padding:18px;margin-bottom:18px}
@@ -657,7 +700,8 @@ main{flex:1;padding:24px 20px 60px;max-width:1180px;margin:0 auto;width:100%}
     <button class="btn ghost sm" id="tb-logout">Sign out</button>
   </header>
   <nav class="tabs" id="tabs">
-    <button data-tab="rooms" class="active">Rooms</button>
+    <button data-tab="home" class="active">🏠 Home</button>
+    <button data-tab="rooms">Rooms</button>
     <button data-tab="dining">Dining &amp; Bars</button>
     <button data-tab="pipeline">Sales Pipeline</button>
     <button data-tab="corprates">Corporate Rates</button>
@@ -668,6 +712,7 @@ main{flex:1;padding:24px 20px 60px;max-width:1180px;margin:0 auto;width:100%}
     <button data-tab="chat">Events Chat</button>
     <button data-tab="mne">M&amp;E Upgrade</button>
     <button data-tab="marketing">Marketing</button>
+    <button data-tab="social">Social Studio</button>
     <button data-tab="menu">Menu Builder</button>
     <button data-tab="brochure">Brochure Builder</button>
     <button data-tab="admin">Admin</button>
