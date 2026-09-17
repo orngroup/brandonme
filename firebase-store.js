@@ -101,14 +101,22 @@ const FBStore = {
   }
 };
 
-/* ---- MARKETING LIBRARY (Firebase Storage + Firestore index) ----
-   Uploaded files go to Storage; metadata to Firestore 'marketing'. */
+/* ---- MARKETING LIBRARY (Cloudinary uploads + Firestore index) ----
+   Uses Cloudinary's free tier (no billing / no Firebase Storage needed).
+   Set CLOUDINARY below. Metadata (incl. the file URL) goes to Firestore
+   'marketing' so it syncs across the team. */
+const CLOUDINARY = {
+  cloudName: "YOUR_CLOUD_NAME",      // from cloudinary.com dashboard
+  uploadPreset: "brandonhall_unsigned" // create an UNSIGNED preset in Settings → Upload
+};
+function cloudinaryConfigured(){ return CLOUDINARY.cloudName && !CLOUDINARY.cloudName.startsWith("YOUR_"); }
+
 const MktStore = {
   _cache: [], _listeners: [], live:false,
   onChange(cb){ this._listeners.push(cb); },
   _emit(){ this._listeners.forEach(cb=>cb(this._cache)); },
   start(){
-    if(!FB.ready || !FB.user || !firebase.storage){ return false; }
+    if(!FB.ready || !FB.user){ return false; }
     if(this.live) return true; this.live=true;
     FB.db.collection("marketing").orderBy("created","desc")
       .onSnapshot(snap=>{ this._cache=snap.docs.map(d=>({id:d.id,...d.data()})); this._emit(); },
@@ -116,21 +124,29 @@ const MktStore = {
     return true;
   },
   items(section){ return this._cache.filter(m=>m.section===section); },
+  canUpload(){ return FB.ready && FB.user && cloudinaryConfigured(); },
   async upload(section, file, name){
-    if(!FB.ready || !FB.user) throw new Error("demo");
-    const path=`marketing/${section}/${Date.now()}_${file.name}`;
-    const ref=firebase.storage().ref().child(path);
-    const snap=await ref.put(file);
-    const url=await snap.ref.getDownloadURL();
-    const type = file.type.startsWith("image/")?"image":
+    if(!FB.ready || !FB.user) throw new Error("Not signed in");
+    if(!cloudinaryConfigured()) throw new Error("Cloudinary not configured — see README");
+    // upload the file to Cloudinary (unsigned, free tier)
+    const fd=new FormData();
+    fd.append("file", file); fd.append("upload_preset", CLOUDINARY.uploadPreset);
+    const isImg=file.type.startsWith("image/");
+    const endpoint=`https://api.cloudinary.com/v1_1/${CLOUDINARY.cloudName}/${isImg?"image":"auto"}/upload`;
+    const res=await fetch(endpoint,{ method:"POST", body:fd });
+    if(!res.ok) throw new Error("Cloudinary upload failed ("+res.status+")");
+    const data=await res.json();
+    const type = isImg?"image":
                  file.type==="application/pdf"?"pdf":
                  file.type.startsWith("video/")?"video":"file";
-    await FB.db.collection("marketing").add({ section, name:name||file.name, url, path,
-      type, size:file.size, created:new Date().toISOString(), by:FB.user.name||"" });
+    // save metadata to Firestore so the whole team sees it
+    await FB.db.collection("marketing").add({ section, name:name||file.name,
+      url:data.secure_url, publicId:data.public_id, type, size:file.size,
+      created:new Date().toISOString(), by:FB.user.name||"" });
   },
-  async remove(id, path){
+  async remove(id){
     if(!FB.ready || !FB.user) return;
-    try{ if(path) await firebase.storage().ref().child(path).delete(); }catch{}
     await FB.db.collection("marketing").doc(id).delete();
+    // (Cloudinary asset stays; deletion there needs a signed call — fine for a small team)
   }
 };

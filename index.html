@@ -299,6 +299,31 @@ main{flex:1;padding:24px 20px 60px;max-width:1180px;margin:0 auto;width:100%}
 .help-body p:last-child{margin-bottom:0}
 .help-body b{color:var(--navy)}
 
+/* ---------- BROCHURE BUILDER ---------- */
+.br-price{width:110px;padding:7px 10px;border:1px solid var(--line);border-radius:7px;background:#fff;font-weight:600}
+.br-inc{width:100%;margin-top:8px;padding:8px 10px;border:1px solid var(--line);border-radius:7px;background:#fff;font-size:12.5px;resize:vertical}
+.br-imgsel{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:var(--paper)}
+.br-imggrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px}
+.br-imgopt{position:relative;cursor:pointer;border:2px solid var(--line);border-radius:8px;overflow:hidden;display:block}
+.br-imgopt.on{border-color:var(--gold)}
+.br-imgopt input{position:absolute;top:5px;left:5px;z-index:2}
+.br-imgopt img{width:100%;height:60px;object-fit:cover;display:block}
+.br-imgopt span{display:block;font-size:10px;padding:3px 5px;text-align:center;color:var(--ink-2);background:var(--paper)}
+.br-preview{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
+.brp-hero{height:150px;background-size:cover;background-position:center;position:relative;display:flex;align-items:flex-end}
+.brp-ov{position:absolute;inset:0;background:linear-gradient(180deg,rgba(26,43,71,.1),rgba(16,29,51,.7))}
+.brp-htxt{position:relative;z-index:2;color:#fff;padding:16px}
+.brp-logo{font-family:var(--serif);font-size:18px;font-weight:600;letter-spacing:2.5px}
+.brp-eyebrow{font-size:8px;letter-spacing:3px;color:var(--gold-soft)}
+.brp-title{font-family:var(--serif);font-size:24px;font-weight:600;line-height:1.1;margin-top:6px}
+.brp-sub{font-style:italic;font-size:12px;color:var(--gold-soft)}
+.brp-body{padding:16px}
+.brp-intro{font-size:12px;color:var(--ink-2);margin-bottom:14px}
+.brp-rate{border-bottom:1px solid var(--line);padding:8px 0}
+.brp-rn{font-family:var(--serif);font-weight:600;color:var(--navy);font-size:14px;display:flex;justify-content:space-between}
+.brp-rn span{color:var(--gold-dk);font-family:var(--sans);font-size:12px}
+.brp-ri{font-size:11px;color:var(--muted);margin-top:2px}
+
 /* ---------- DINING & MENU ---------- */
 .rest-key{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--ink-2);margin-bottom:10px}
 .rest-plan{max-width:640px}
@@ -326,6 +351,17 @@ main{flex:1;padding:24px 20px 60px;max-width:1180px;margin:0 auto;width:100%}
 .mp-dd{font-size:11.5px;color:var(--muted);font-style:italic}
 .mp-price{font-family:var(--serif);font-size:17px;color:var(--navy);font-weight:600;margin-top:18px}
 .mp-footer{font-size:9.5px;color:var(--muted);margin-top:20px;border-top:1px solid var(--gold-soft);padding-top:10px;line-height:1.5}
+
+/* ---------- CORPORATE RATE PLANNER ---------- */
+.corp-candidates{background:linear-gradient(135deg,#eef5ec,#e4f0e2);border:1px solid #cfe0ca;border-radius:12px;padding:18px;margin-bottom:18px}
+.cand-row{display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid rgba(74,124,89,.15)}
+.cand-row:last-child{border-bottom:none}
+.cand-name{font-weight:600;font-size:14.5px;min-width:180px}
+.cand-stats{flex:1;font-size:12.5px;color:#4a6147}
+.cand-flag{background:var(--ok);color:#fff;font-size:11px;font-weight:700;padding:4px 12px;border-radius:12px;white-space:nowrap}
+.cand-flag.sm{padding:2px 9px;font-size:10.5px}
+.data-table tr.cand td{background:#f2f9f0}
+#cr-paste{width:100%;padding:11px;border:1px solid var(--line);border-radius:9px;background:var(--paper);font-family:ui-monospace,monospace;font-size:12.5px}
 
 /* ---------- MARKETING LIBRARY ---------- */
 .mkt-nav{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px}
@@ -624,6 +660,7 @@ main{flex:1;padding:24px 20px 60px;max-width:1180px;margin:0 auto;width:100%}
     <button data-tab="rooms" class="active">Rooms</button>
     <button data-tab="dining">Dining &amp; Bars</button>
     <button data-tab="pipeline">Sales Pipeline</button>
+    <button data-tab="corprates">Corporate Rates</button>
     <button data-tab="packages">Packages</button>
     <button data-tab="suppliers">Suppliers</button>
     <button data-tab="quote">Create Quote</button>
@@ -632,6 +669,7 @@ main{flex:1;padding:24px 20px 60px;max-width:1180px;margin:0 auto;width:100%}
     <button data-tab="mne">M&amp;E Upgrade</button>
     <button data-tab="marketing">Marketing</button>
     <button data-tab="menu">Menu Builder</button>
+    <button data-tab="brochure">Brochure Builder</button>
     <button data-tab="admin">Admin</button>
   </nav>
   <main id="view"></main>
@@ -646,7 +684,6 @@ main{flex:1;padding:24px 20px 60px;max-width:1180px;margin:0 auto;width:100%}
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 <script src="firebase-config.js"></script>
 <script src="firebase-store.js"></script>
 <script src="app.js"></script>

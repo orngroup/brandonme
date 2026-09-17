@@ -743,3 +743,86 @@ const WEDDING_CONTENT = {
   closing:"We'd love to welcome you to one of our Wedding Showcase open days. Shall I put your date on hold while you decide?",
   contact:"Natalie Freeman · Event Executive · 024 7710 2555 ext 2003 · natalie.freeman@brandonhallhotelandspa.com"
 };
+
+/* ============================================================
+   CORPORATE RATE PLANNER
+   Patrik pastes the weekly Guestline arrival list; we parse it,
+   aggregate by company, and flag corporate-rate candidates.
+   Goal (Nicola): shift OTA bookings → direct corporate rates.
+   ============================================================ */
+const CORP_THRESHOLD = 150; // room-nights p.a. to warrant a corporate rate
+
+/* OTA / commissionable rate-code fragments (customise as needed) */
+const OTA_MARKERS = ["BOOKING","BCOM","EXPEDIA","EXP","OTA","HOTELS.COM","HCOM","AGODA","LASTMIN","LMIN","THIRD","WHOLESALE","WHL"];
+function isOTARate(rateCode){
+  const c=(rateCode||"").toUpperCase();
+  return OTA_MARKERS.some(m=>c.includes(m));
+}
+
+/* ============================================================
+   BROCHURE BUILDER — flexible rate-sheet brochures
+   Starter templates from real Brandon Hall rates.
+   ============================================================ */
+const BROCHURE_IMAGES = [
+  { id:"meeting-1", label:"Meeting room 1", file:GALLERY?.meetings?.[0]||"" },
+  { id:"meeting-2", label:"Meeting room 2", file:GALLERY?.meetings?.[1]||"" },
+  { id:"meeting-3", label:"Meeting room 3", file:GALLERY?.meetings?.[2]||"" },
+  { id:"exterior",  label:"Hotel exterior", file:"assets/weddings/wedding-25.jpg" },
+  { id:"gardens",   label:"Gardens",        file:"assets/weddings/wedding-14.jpg" },
+  { id:"wedding-suite", label:"Woodlands (dressed)", file:"assets/weddings/wedding-21.jpg" },
+  { id:"ceremony",  label:"Ceremony",       file:"assets/weddings/wedding-06.jpg" },
+  { id:"bar",       label:"Bar & lounge",   file:"assets/weddings/wedding-22.jpg" },
+  { id:"spa",       label:"Spa",            file:"assets/weddings/wedding-24.jpg" },
+  { id:"dining",    label:"Table settings", file:"assets/weddings/wedding-07.jpg" }
+];
+
+const BROCHURE_TEMPLATES = {
+  meetings: {
+    title:"Meetings & Events", subtitle:"Where history feels like home",
+    intro:"Brandon Hall Hotel & Spa offers the perfect balance of professionalism, comfort and memorable surroundings — making it an exceptional choice for meetings and events of all kinds. Set within beautiful landscaped grounds, the venue provides a calm and inspiring environment that encourages productivity, creativity and connection.\n\nWith a range of flexible event spaces, Brandon Hall can accommodate everything from small boardroom meetings to large conferences, celebrations and corporate gatherings. Guests benefit from on-site accommodation, allowing multi-day events to flow seamlessly, while the spa and leisure facilities enhance any event.",
+    heroImg:"exterior", images:["meeting-1","meeting-2","gardens"],
+    rates:[
+      { name:"Midweek Day Delegate", price:"From £35.00", inc:"Meeting room hire, unlimited tea, coffee & water, 2 servings of sweet & savoury items (mid-morning & mid-afternoon), hot & cold lunch options, plasma screen, HDMI cable, flipchart with pads & pens, complimentary WiFi, complimentary car parking" },
+      { name:"Weekend Day Delegate", price:"From £30.00", inc:"As Midweek Day Delegate — meeting room hire, unlimited tea, coffee & water, 2 servings mid-morning & mid-afternoon, hot & cold lunch, plasma screen, HDMI cable, flipchart, WiFi, car parking" },
+      { name:"24-Hour Delegate", price:"From £155.00", inc:"Everything in the Day Delegate package, plus dinner, 1 night's accommodation and breakfast" }
+    ],
+    cta:"To arrange a viewing or discuss your event, contact our events team.",
+    ratesNote:"All rates include VAT. Rates are 'from' and subject to availability and final numbers."
+  },
+  weddings: {
+    title:"Weddings & Celebrations", subtitle:"Celebrate in countryside style",
+    intro:"Congratulations on your engagement! Set in 17 acres of Warwickshire grounds and gardens, Brandon Hall Hotel & Spa is the perfect setting to say \"I do.\" Elegant spaces, warm and welcoming service, and beautiful surroundings — every celebration personal, cared for, and truly yours.\n\nOur beautiful Brandon Suite caters for up to 50 guests in the day and a further 75 in the evening, while the Woodlands Suite hosts up to 280. An exclusive feel, without the exclusive price tag — with everyone under one roof.",
+    heroImg:"ceremony", images:["wedding-suite","dining","gardens"],
+    rates:[
+      { name:"The Essentials", price:"On request", inc:"Dedicated wedding planner, ceremony & reception rooms, wedding breakfast, room hire & setup" },
+      { name:"All-Inclusive", price:"On request", inc:"A complete package — drinks reception, three-course dinner, evening reception" },
+      { name:"Tailored", price:"On request", inc:"Designed entirely around you — flexible spaces & menus, add the details you choose" }
+    ],
+    cta:"We'd love to welcome you to a Wedding Showcase open day. Shall we put your date on hold?",
+    ratesNote:"Every wedding is unique — speak to our team to shape a package that's right for you."
+  },
+  christmas: {
+    title:"Christmas & New Year", subtitle:"Celebrate the season with us",
+    intro:"Make this Christmas one to remember at Brandon Hall Hotel & Spa. From shared party nights to private celebrations and our New Year's Eve gala, we have something for every festive occasion — all in a beautiful country-house setting.",
+    heroImg:"gardens", images:["wedding-suite","dining","bar"],
+    rates:[
+      { name:"Joiner Party Night", price:"From £55.00pp", inc:"Room hire, arrival drink, novelties & décor, 3-course menu, DJ (Oompah band on selected dates)" },
+      { name:"Private Party Night", price:"From £45.00pp", inc:"Room hire, arrival drink, 3-course menu, DJ, ½ bottle of wine per person" },
+      { name:"New Year's Eve Gala", price:"From £195.00pp", inc:"Bed & breakfast, prosecco & canapés, 4-course gala dinner, entertainment, midnight prosecco, NYD brunch" }
+    ],
+    cta:"Book early — festive dates fill quickly. Contact our events team to reserve.",
+    ratesNote:"All rates include VAT. Minimum numbers apply to private events."
+  },
+  corporate: {
+    title:"Corporate Rates", subtitle:"Direct rates for business guests",
+    intro:"Brandon Hall Hotel & Spa offers preferential corporate rates for regular business guests. Enjoy comfortable en-suite accommodation, on-site dining, complimentary parking and WiFi, and easy access to Coventry and the motorway network — all with the convenience of booking direct.",
+    heroImg:"exterior", images:["bar","spa","gardens"],
+    rates:[
+      { name:"Corporate Bed & Breakfast", price:"On request", inc:"En-suite room, full breakfast, complimentary WiFi & parking, preferential direct rate" },
+      { name:"Corporate Dinner, Bed & Breakfast", price:"On request", inc:"En-suite room, dinner, full breakfast, WiFi & parking" },
+      { name:"Long-Stay / Volume", price:"On request", inc:"Negotiated rate for 150+ room nights per year — contact us to set up an account" }
+    ],
+    cta:"Set up a corporate account — contact our sales team to discuss your requirements.",
+    ratesNote:"Corporate rates are agreed on application and subject to a minimum annual room-night commitment."
+  }
+};

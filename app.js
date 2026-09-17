@@ -125,8 +125,8 @@ async function boot(){
 }
 function render(){
   const v=$("#view"); v.innerHTML="";
-  ({rooms:renderRooms, dining:renderDining, pipeline:renderPipeline, packages:renderPackages, suppliers:renderSuppliers, quote:renderQuote,
-    profit:renderProfit, chat:renderChat, mne:renderMnE, marketing:renderMarketing, menu:renderMenuBuilder, admin:renderAdmin }[CURRENT_TAB]||renderRooms)(v);
+  ({rooms:renderRooms, dining:renderDining, pipeline:renderPipeline, corprates:renderCorpRates, packages:renderPackages, suppliers:renderSuppliers, quote:renderQuote,
+    profit:renderProfit, chat:renderChat, mne:renderMnE, marketing:renderMarketing, menu:renderMenuBuilder, brochure:renderBrochureBuilder, admin:renderAdmin }[CURRENT_TAB]||renderRooms)(v);
 }
 
 /* ============================================================ ROOMS */
@@ -1789,14 +1789,14 @@ function renderMarketing(v){
   });
   v.appendChild(grid);
   grid.querySelectorAll(".del").forEach(b=>b.onclick=async()=>{
-    if(confirm("Remove this asset?")){ await MktStore.remove(b.dataset.id,b.dataset.path); render(); }
+    if(confirm("Remove this asset?")){ await MktStore.remove(b.dataset.id); render(); }
   });
 }
 function openUploadForm(section){
   const sec=MKT_SECTIONS.find(s=>s.id===section);
-  const live=(typeof MktStore!=="undefined" && MktStore.live);
+  const canUp=(typeof MktStore!=="undefined" && MktStore.canUpload && MktStore.canUpload());
   const body=`
-    ${!live?`<div class="admin-note">Uploads need Firebase Storage enabled. In demo mode you can preview the picker, but files won't save until the portal is live. See README.</div>`:""}
+    ${!canUp?`<div class="admin-note">Uploads need the portal live (Firebase) and a free Cloudinary account connected. In demo mode you can preview the picker, but files won't save. See README → Marketing uploads.</div>`:""}
     <div class="form-grid">
       <div class="full"><label>Display name (optional)</label><input id="up-name" placeholder="e.g. Summer Spa Flyer"></div>
       <div class="full"><label>File</label><input id="up-file" type="file"></div>
@@ -1807,7 +1807,7 @@ function openUploadForm(section){
   $("#up-go").onclick=async()=>{
     const f=$("#up-file").files[0];
     if(!f){ $("#up-status").textContent="Choose a file first."; return; }
-    if(!live){ $("#up-status").innerHTML=`<span style="color:var(--warn)">Demo mode — connect Firebase Storage to save uploads.</span>`; return; }
+    if(!canUp){ $("#up-status").innerHTML=`<span style="color:var(--warn)">Not connected — see README to enable uploads (free, no billing).</span>`; return; }
     $("#up-status").textContent="Uploading…"; $("#up-go").disabled=true;
     try{ await MktStore.upload(section, f, $("#up-name").value.trim());
       closeModal(); render();
@@ -1959,6 +1959,352 @@ function printMenu(){
       ${MENU.price?`<div class="price">${MENU.price}</div>`:""}
       ${MENU.footer?`<div class="footer">${MENU.footer}</div>`:""}
     </div><script>window.onload=()=>setTimeout(()=>window.print(),400)<\/script></body></html>`);
+  win.document.close();
+}
+
+/* ============================================================ CORPORATE RATE PLANNER */
+const CorpStore={ key:"bh_corp",
+  all(){ try{return JSON.parse(localStorage.getItem(this.key))||[]}catch{return[]} },
+  save(l){ localStorage.setItem(this.key,JSON.stringify(l)); },
+  addBatch(rows,meta){ const l=this.all(); l.unshift({ id:"WK-"+Date.now().toString(36).toUpperCase(),
+    added:new Date().toISOString(), from:meta.from, to:meta.to, rows }); this.save(l); },
+  remove(id){ this.save(this.all().filter(x=>x.id!==id)); } };
+
+function renderCorpRates(v){
+  v.appendChild(head("Corporate Rate Planner","Shift guests off commissionable OTA bookings onto direct corporate rates. Paste the weekly Guestline arrival list; we flag companies worth a corporate rate."));
+
+  // help / instructions
+  const help=el("div","help-box");
+  help.innerHTML=`<button class="help-toggle" id="cr-help-t">💡 How this works</button>
+    <div class="help-body hidden" id="cr-help-b">
+      <p><b>Each week</b>, Patrik pulls the arrival list from Guestline and pastes it below — filtered to show guest name, length of stay, average rate, rate code and company name.</p>
+      <p>The planner aggregates by <b>company</b>: total room nights, average rate, OTA vs direct split, and day-of-week pattern.</p>
+      <p>Any company over <b>${CORP_THRESHOLD} room nights</b> (annualised) that's booking through OTAs is flagged as a <b>corporate-rate candidate</b> — the ones worth moving onto a direct dynamic rate.</p>
+      <p>Paste formats accepted: tab-separated (straight from Guestline/Excel), or comma-separated. Columns in any order with a header row, or in the order: <i>Guest, Nights, Rate, Rate Code, Company</i>.</p>
+    </div>`;
+  v.appendChild(help);
+
+  // input panel
+  const inp=el("div","quote-panel");
+  inp.innerHTML=`<h3>Paste weekly arrival list</h3>
+    <div class="form-grid" style="margin-bottom:10px">
+      <div><label>Week from</label><input id="cr-from" type="date"></div>
+      <div><label>Week to</label><input id="cr-to" type="date"></div>
+    </div>
+    <textarea id="cr-paste" rows="7" placeholder="Paste from Guestline/Excel here…&#10;Guest Name    Nights    Avg Rate    Rate Code    Company&#10;J Smith    3    95.00    CORP01    Jaguar Land Rover&#10;A Patel    2    120.00    BCOM    Deloitte"></textarea>
+    <div style="margin-top:12px;display:flex;gap:10px">
+      <button class="btn" id="cr-parse">Add to planner</button>
+      <span class="qs-sub" id="cr-parsemsg" style="align-self:center"></span>
+    </div>`;
+  v.appendChild(inp);
+  $("#cr-help-t").onclick=()=>$("#cr-help-b").classList.toggle("hidden");
+  $("#cr-parse").onclick=()=>{
+    const raw=$("#cr-paste").value.trim();
+    if(!raw){ $("#cr-parsemsg").textContent="Paste some rows first."; return; }
+    const rows=parseArrivals(raw);
+    if(!rows.length){ $("#cr-parsemsg").innerHTML='<span style="color:#b3261e">Couldn\'t read any rows — check the format.</span>'; return; }
+    CorpStore.addBatch(rows,{from:$("#cr-from").value,to:$("#cr-to").value});
+    render();
+  };
+
+  // ---- aggregate all weeks ----
+  const weeks=CorpStore.all();
+  const allRows=[].concat(...weeks.map(w=>w.rows));
+  if(!allRows.length){
+    v.appendChild(el("div","empty",`<div class="big">No data yet</div>Paste the first weekly arrival list above to build the planner.`));
+    return;
+  }
+
+  // company aggregation
+  const comp={};
+  allRows.forEach(r=>{
+    const key=r.company||"(unknown)";
+    const c=comp[key]||(comp[key]={company:key, nights:0, rateSum:0, rateN:0, ota:0, direct:0, dows:{}, stays:[]});
+    c.nights+=r.nights; if(r.rate){ c.rateSum+=r.rate*r.nights; c.rateN+=r.nights; }
+    if(isOTARate(r.rateCode)) c.ota+=r.nights; else c.direct+=r.nights;
+    c.stays.push(r.nights);
+    if(r.dow!=null) c.dows[r.dow]=(c.dows[r.dow]||0)+1;
+  });
+  const companies=Object.values(comp).map(c=>{
+    c.avgRate=c.rateN? c.rateSum/c.rateN : 0;
+    c.avgStay=c.stays.length? c.stays.reduce((a,b)=>a+b,0)/c.stays.length : 0;
+    // annualise room nights from weeks of data
+    c.annualised=Math.round(c.nights/(weeks.length||1)*52);
+    c.candidate = c.annualised>=CORP_THRESHOLD && c.ota>0;
+    // top day of week
+    const dowNames=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+    const topDow=Object.entries(c.dows).sort((a,b)=>b[1]-a[1])[0];
+    c.pattern=topDow? dowNames[topDow[0]] : "—";
+    return c;
+  }).sort((a,b)=>b.nights-a.nights);
+
+  const totalNights=allRows.reduce((s,r)=>s+r.nights,0);
+  const otaNights=companies.reduce((s,c)=>s+c.ota,0);
+  const candidates=companies.filter(c=>c.candidate);
+
+  // ---- KPIs ----
+  const kpis=el("div","stat-cards");
+  kpis.innerHTML=`
+    <div class="stat-card"><div class="sc-v">${companies.length}</div><div class="sc-k">Companies</div></div>
+    <div class="stat-card"><div class="sc-v">${totalNights}</div><div class="sc-k">Room nights (${weeks.length} wk${weeks.length>1?"s":""})</div></div>
+    <div class="stat-card"><div class="sc-v" style="color:#b3261e">${totalNights?Math.round(otaNights/totalNights*100):0}%</div><div class="sc-k">Booked via OTA</div></div>
+    <div class="stat-card accent"><div class="sc-v">${candidates.length}</div><div class="sc-k">Corporate candidates</div></div>
+    <div class="stat-card"><div class="sc-v">${money(Math.round(allRows.reduce((s,r)=>s+(r.rate||0)*r.nights,0)/(totalNights||1)))}</div><div class="sc-k">Avg rate</div></div>`;
+  v.appendChild(kpis);
+
+  // ---- candidates callout ----
+  if(candidates.length){
+    const cand=el("div","corp-candidates");
+    cand.innerHTML=`<div class="cc-title" style="margin-bottom:10px">🎯 Corporate rate candidates <span class="qs-sub">(over ${CORP_THRESHOLD} annualised room nights, currently on OTA)</span></div>`+
+      candidates.map(c=>`<div class="cand-row">
+        <div class="cand-name">${c.company}</div>
+        <div class="cand-stats">${c.annualised} nights/yr · ${c.ota} OTA nights · avg ${money(Math.round(c.avgRate))}</div>
+        <span class="cand-flag">Set up corporate rate</span></div>`).join("");
+    v.appendChild(cand);
+  }
+
+  // ---- full company table ----
+  v.appendChild(el("div","sec-title","All companies"));
+  const t=el("table","data-table");
+  t.innerHTML=`<tr><th>Company</th><th>Room nights</th><th>Annualised</th><th>Avg stay</th><th>Avg rate</th><th>OTA / Direct</th><th>Peak day</th><th></th></tr>`+
+    companies.map(c=>`<tr class="${c.candidate?'cand':''}">
+      <td>${c.company}</td><td>${c.nights}</td><td>${c.annualised}</td>
+      <td>${c.avgStay.toFixed(1)}</td><td>${c.avgRate?money(Math.round(c.avgRate)):"—"}</td>
+      <td>${c.ota} / ${c.direct}</td><td>${c.pattern}</td>
+      <td>${c.candidate?'<span class="cand-flag sm">Candidate</span>':''}</td></tr>`).join("");
+  v.appendChild(t);
+
+  // ---- weeks log ----
+  v.appendChild(el("div","sec-title","Weekly submissions"));
+  const wt=el("table","data-table");
+  wt.innerHTML=`<tr><th>Reference</th><th>Period</th><th>Rows</th><th>Added</th><th></th></tr>`+
+    weeks.map(w=>`<tr><td>${w.id}</td><td>${w.from||"—"} → ${w.to||"—"}</td><td>${w.rows.length}</td>
+      <td>${new Date(w.added).toLocaleDateString("en-GB")}</td>
+      <td><button class="mne-del wk-del" data-id="${w.id}">×</button></td></tr>`).join("");
+  v.appendChild(wt);
+  wt.querySelectorAll(".wk-del").forEach(b=>b.onclick=()=>{ if(confirm("Remove this week's data?")){ CorpStore.remove(b.dataset.id); render(); } });
+}
+
+/* Parse pasted arrival list — tab or comma separated, header-aware */
+function parseArrivals(raw){
+  const lines=raw.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  if(!lines.length) return [];
+  const sep = lines[0].includes("\t") ? "\t" : (lines[0].split(",").length>lines[0].split("\t").length ? "," : "\t");
+  // detect header
+  let headerMap=null, start=0;
+  const first=lines[0].toLowerCase();
+  if(/guest|name|night|rate|company|code/.test(first)){
+    const cols=lines[0].split(sep).map(s=>s.trim().toLowerCase());
+    headerMap={};
+    cols.forEach((c,i)=>{
+      if(/guest|name/.test(c)) headerMap.guest=i;
+      else if(/night|los|length/.test(c)) headerMap.nights=i;
+      else if(/rate code|code|plan/.test(c)) headerMap.rateCode=i;
+      else if(/rate|adr|price/.test(c)) headerMap.rate=i;
+      else if(/company|account|client/.test(c)) headerMap.company=i;
+      else if(/arriv|date/.test(c)) headerMap.date=i;
+    });
+    start=1;
+  }
+  const rows=[];
+  for(let i=start;i<lines.length;i++){
+    const p=lines[i].split(sep).map(s=>s.trim());
+    if(p.length<2) continue;
+    let guest,nights,rate,rateCode,company,date;
+    if(headerMap){
+      guest=p[headerMap.guest]||""; nights=parseFloat(p[headerMap.nights])||0;
+      rate=parseFloat((p[headerMap.rate]||"").replace(/[£$,]/g,""))||0;
+      rateCode=p[headerMap.rateCode]||""; company=p[headerMap.company]||"";
+      date=headerMap.date!=null?p[headerMap.date]:"";
+    } else {
+      // positional: Guest, Nights, Rate, RateCode, Company
+      guest=p[0]||""; nights=parseFloat(p[1])||0;
+      rate=parseFloat((p[2]||"").replace(/[£$,]/g,""))||0;
+      rateCode=p[3]||""; company=p.slice(4).join(" ")||"";
+    }
+    if(!guest && !company) continue;
+    let dow=null; if(date){ const d=new Date(date); if(!isNaN(d)) dow=d.getDay(); }
+    rows.push({ guest, nights:nights||1, rate, rateCode, company, dow });
+  }
+  return rows;
+}
+
+/* ============================================================ BROCHURE BUILDER */
+let BROCHURE=null;
+const BrochureStore={ key:"bh_brochures",
+  all(){ try{return JSON.parse(localStorage.getItem(this.key))||[]}catch{return[]} },
+  save(l){ localStorage.setItem(this.key,JSON.stringify(l)); },
+  add(b){ const l=this.all(); l.unshift(b); this.save(l); },
+  remove(id){ this.save(this.all().filter(x=>x.id!==id)); } };
+
+function loadBrochureTemplate(key){
+  const t=BROCHURE_TEMPLATES[key];
+  BROCHURE=JSON.parse(JSON.stringify(t));
+  BROCHURE._template=key;
+}
+function renderBrochureBuilder(v){
+  v.appendChild(head("Brochure Builder","Build a branded rate brochure — pick a template, edit the copy, rates and images, preview, then produce a polished PDF and save it with an issue date."));
+  if(!BROCHURE) loadBrochureTemplate("meetings");
+
+  // template bar
+  const trow=el("div","tmpl-row");
+  trow.innerHTML=`<label>Template</label>
+    <select id="br-template">${Object.entries(BROCHURE_TEMPLATES).map(([k,t])=>`<option value="${k}" ${BROCHURE._template===k?"selected":""}>${t.title}</option>`).join("")}</select>
+    <button class="btn sm" id="br-load">Load</button>`;
+  v.appendChild(trow);
+
+  const wrap=el("div","quote-layout");
+  // editor
+  const left=el("div","quote-panel");
+  left.innerHTML=`<h3>Content</h3>
+    <div class="form-grid">
+      <div><label>Title</label><input id="br-title" value="${(BROCHURE.title||'').replace(/"/g,'&quot;')}"></div>
+      <div><label>Subtitle</label><input id="br-sub" value="${(BROCHURE.subtitle||'').replace(/"/g,'&quot;')}"></div>
+    </div>
+    <div style="margin-top:12px"><label>Intro copy</label><textarea id="br-intro" rows="6">${BROCHURE.intro||''}</textarea></div>
+
+    <div class="rooms-head"><h3 style="margin-top:20px">Rates</h3><button class="btn sm" id="br-addrate">+ Add rate</button></div>
+    <div id="br-rates"></div>
+
+    <h3 style="margin-top:20px">Hero image</h3>
+    <select id="br-hero" class="br-imgsel">${BROCHURE_IMAGES.map(im=>`<option value="${im.id}" ${BROCHURE.heroImg===im.id?"selected":""}>${im.label}</option>`).join("")}</select>
+
+    <h3 style="margin-top:20px">Feature images <span class="qs-sub">(tick up to 3)</span></h3>
+    <div class="br-imggrid" id="br-images"></div>
+
+    <div style="margin-top:16px"><label>Call to action</label><input id="br-cta" value="${(BROCHURE.cta||'').replace(/"/g,'&quot;')}"></div>
+    <div style="margin-top:12px"><label>Rates note / footer</label><input id="br-note" value="${(BROCHURE.ratesNote||'').replace(/"/g,'&quot;')}"></div>`;
+  wrap.appendChild(left);
+
+  // preview + actions
+  const right=el("div","quote-panel");
+  right.innerHTML=`<h3>Preview</h3><div id="br-preview" class="br-preview"></div>
+    <div class="dual-btn"><button class="btn" id="br-pdf">Produce PDF</button>
+    <button class="btn ghost" id="br-save">Save version</button></div>
+    <div id="br-saved"></div>`;
+  wrap.appendChild(right);
+  v.appendChild(wrap);
+
+  renderBrochureRates();
+  renderBrochureImages();
+  ["br-title","br-sub","br-intro","br-cta","br-note"].forEach(id=>$("#"+id).addEventListener("input",()=>{
+    BROCHURE.title=$("#br-title").value; BROCHURE.subtitle=$("#br-sub").value;
+    BROCHURE.intro=$("#br-intro").value; BROCHURE.cta=$("#br-cta").value;
+    BROCHURE.ratesNote=$("#br-note").value; renderBrochurePreview(); }));
+  $("#br-hero").onchange=e=>{ BROCHURE.heroImg=e.target.value; renderBrochurePreview(); };
+  $("#br-load").onclick=()=>{ loadBrochureTemplate($("#br-template").value); switchTab("brochure"); };
+  $("#br-addrate").onclick=()=>{ BROCHURE.rates.push({name:"New rate",price:"",inc:""}); renderBrochureRates(); renderBrochurePreview(); };
+  $("#br-pdf").onclick=produceBrochurePDF;
+  $("#br-save").onclick=saveBrochure;
+  renderBrochurePreview(); renderSavedBrochures();
+}
+function renderBrochureRates(){
+  const box=$("#br-rates"); if(!box)return; box.innerHTML="";
+  BROCHURE.rates.forEach((r,i)=>{
+    const card=el("div","menu-course");
+    card.innerHTML=`<div class="mc-head">
+        <input class="mc-name" data-i="${i}" data-f="name" value="${(r.name||'').replace(/"/g,'&quot;')}" placeholder="Rate name">
+        <input class="br-price" data-i="${i}" data-f="price" value="${(r.price||'').replace(/"/g,'&quot;')}" placeholder="Price">
+        <button class="mc-del" data-i="${i}">×</button></div>
+      <textarea class="br-inc" data-i="${i}" data-f="inc" rows="2" placeholder="Inclusions">${r.inc||''}</textarea>`;
+    box.appendChild(card);
+  });
+  box.querySelectorAll("input,textarea").forEach(inp=>inp.oninput=e=>{
+    BROCHURE.rates[+e.target.dataset.i][e.target.dataset.f]=e.target.value; renderBrochurePreview(); });
+  box.querySelectorAll(".mc-del").forEach(b=>b.onclick=()=>{ BROCHURE.rates.splice(+b.dataset.i,1); renderBrochureRates(); renderBrochurePreview(); });
+}
+function renderBrochureImages(){
+  const box=$("#br-images"); if(!box)return;
+  box.innerHTML=BROCHURE_IMAGES.map(im=>{
+    const on=(BROCHURE.images||[]).includes(im.id);
+    return `<label class="br-imgopt ${on?'on':''}"><input type="checkbox" data-id="${im.id}" ${on?'checked':''}>
+      <img src="${im.file}" loading="lazy" onerror="this.style.opacity=.2"><span>${im.label}</span></label>`;
+  }).join("");
+  box.querySelectorAll("input").forEach(cb=>cb.onchange=()=>{
+    BROCHURE.images=BROCHURE.images||[];
+    if(cb.checked){ if(BROCHURE.images.length<3) BROCHURE.images.push(cb.dataset.id); else cb.checked=false; }
+    else BROCHURE.images=BROCHURE.images.filter(x=>x!==cb.dataset.id);
+    renderBrochureImages(); renderBrochurePreview();
+  });
+}
+function imgFile(id){ return (BROCHURE_IMAGES.find(i=>i.id===id)||{}).file||""; }
+function renderBrochurePreview(){
+  const box=$("#br-preview"); if(!box)return;
+  const hero=imgFile(BROCHURE.heroImg);
+  box.innerHTML=`
+    <div class="brp-hero" style="background-image:url('${hero}')"><div class="brp-ov"></div>
+      <div class="brp-htxt"><div class="brp-logo">BRANDON HALL</div><div class="brp-eyebrow">HOTEL &amp; SPA</div>
+        <div class="brp-title">${BROCHURE.title||''}</div><div class="brp-sub">${BROCHURE.subtitle||''}</div></div></div>
+    <div class="brp-body">
+      <p class="brp-intro">${(BROCHURE.intro||'').split("\n").filter(Boolean)[0]||''}</p>
+      <div class="brp-rates">${BROCHURE.rates.map(r=>`<div class="brp-rate"><div class="brp-rn">${r.name} <span>${r.price||''}</span></div><div class="brp-ri">${r.inc||''}</div></div>`).join("")}</div>
+    </div>`;
+}
+function renderSavedBrochures(){
+  const box=$("#br-saved"); if(!box)return;
+  const list=BrochureStore.all();
+  if(!list.length){ box.innerHTML=""; return; }
+  box.innerHTML=`<div class="sec-title" style="margin-top:18px">Saved versions</div>`+
+    `<table class="scenario-table"><tr><th>Title</th><th>Issued</th><th></th></tr>`+
+    list.map(b=>`<tr><td>${b.title}</td><td>${b.issued}</td>
+      <td><button class="sc-del" data-id="${b.id}">×</button></td></tr>`).join("")+`</table>`;
+  box.querySelectorAll(".sc-del").forEach(b=>b.onclick=()=>{ BrochureStore.remove(b.dataset.id); renderSavedBrochures(); });
+}
+function saveBrochure(){
+  const issued=new Date().toLocaleDateString("en-GB");
+  BrochureStore.add({ id:"BR-"+Date.now().toString(36).toUpperCase(), title:BROCHURE.title,
+    issued, template:BROCHURE._template, data:JSON.parse(JSON.stringify(BROCHURE)) });
+  renderSavedBrochures();
+  alert(`Saved "${BROCHURE.title}" — issued ${issued}.`);
+}
+function produceBrochurePDF(){
+  const b=BROCHURE;
+  const issued=new Date().toLocaleDateString("en-GB");
+  const hero=imgFile(b.heroImg);
+  const imgs=(b.images||[]).map(imgFile).filter(Boolean);
+  const introPs=(b.intro||"").split("\n").filter(Boolean).map(p=>`<p>${p}</p>`).join("");
+  const rates=b.rates.map(r=>`<tr><td class="rn">${r.name}</td><td class="rp">${r.price||""}</td><td class="ri">${r.inc||""}</td></tr>`).join("");
+  const win=window.open("","_blank");
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${b.title}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>@page{margin:0}body{margin:0;font-family:'Inter',Arial,sans-serif;color:#1a2230;font-size:12px;line-height:1.55}
+    .hero{height:135mm;background:url('${hero}') center/cover;position:relative;display:flex;align-items:flex-end}
+    .hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(26,43,71,.15),rgba(16,29,51,.75))}
+    .htxt{position:relative;z-index:2;color:#fff;padding:20mm}
+    .logo{font-family:'Cormorant Garamond',serif;font-size:30px;font-weight:600;letter-spacing:4px}
+    .eyebrow{font-size:11px;letter-spacing:5px;color:#e8dccf;margin-bottom:14px}
+    .htitle{font-family:'Cormorant Garamond',serif;font-size:44px;font-weight:600;line-height:1.05}
+    .hsub{font-style:italic;font-size:16px;color:#e8dccf;margin-top:6px}
+    .body{padding:18mm 20mm}
+    h2{font-family:'Cormorant Garamond',serif;font-size:24px;color:#1a2b47;margin:0 0 4px}
+    .rule{height:2px;width:56px;background:#BB9979;margin:8px 0 16px}
+    .intro p{color:#3a4256;margin:0 0 10px}
+    .imgrow{display:flex;gap:8px;margin:16px 0}
+    .imgrow img{width:33.33%;height:52mm;object-fit:cover;border-radius:6px}
+    table{width:100%;border-collapse:collapse;margin-top:8px}
+    td{padding:12px 10px;border-bottom:1px solid #e3e7ee;vertical-align:top}
+    .rn{font-family:'Cormorant Garamond',serif;font-size:17px;font-weight:600;color:#1a2b47;width:32%}
+    .rp{color:#9d7d5f;font-weight:600;width:20%;font-size:14px}
+    .ri{color:#3a4256;font-size:11.5px}
+    .cta{background:#1a2b47;color:#fff;border-radius:10px;padding:18px 22px;margin-top:22px;text-align:center;font-size:14px}
+    .cta b{font-family:'Cormorant Garamond',serif;font-size:18px;display:block;margin-bottom:4px}
+    .foot{margin-top:20px;font-size:10px;color:#7a8494;text-align:center;border-top:1px solid #e8dccf;padding-top:14px}
+    .issued{position:absolute;top:14mm;right:16mm;z-index:3;color:#fff;font-size:10px;opacity:.85}</style>
+    </head><body>
+    <div class="hero"><div class="issued">Issued ${issued}</div>
+      <div class="htxt"><div class="logo">BRANDON HALL</div><div class="eyebrow">HOTEL &amp; SPA</div>
+        <div class="htitle">${b.title||""}</div><div class="hsub">${b.subtitle||""}</div></div></div>
+    <div class="body">
+      <h2>Welcome</h2><div class="rule"></div>
+      <div class="intro">${introPs}</div>
+      ${imgs.length?`<div class="imgrow">${imgs.map(u=>`<img src="${u}">`).join("")}</div>`:""}
+      <h2 style="margin-top:18px">Our Rates</h2><div class="rule"></div>
+      <table>${rates}</table>
+      ${b.ratesNote?`<p style="font-size:10.5px;color:#7a8494;margin-top:10px">${b.ratesNote}</p>`:""}
+      ${b.cta?`<div class="cta"><b>${b.cta}</b>+44 (0)247 710 2555 · events@brandonhallhotelandspa.com</div>`:""}
+      <div class="foot">Brandon Hall Hotel &amp; Spa · Main Street, Brandon, Wolston, Coventry CV8 3FW · brandonhallhotelandspa.com</div>
+    </div>
+    <script>window.onload=()=>setTimeout(()=>window.print(),500)<\/script></body></html>`);
   win.document.close();
 }
 
