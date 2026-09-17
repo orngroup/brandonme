@@ -110,7 +110,9 @@ async function boot(){
   if(DB.live()){
     FBStore.start();                       // begin live Firestore sync
     await FBStore.seedOnce(SEED_SAMPLES);   // seed only if empty
-    FBStore.onChange(()=>{ if(CURRENT_TAB==="enquiries") render(); }); // live refresh
+    FBStore.onChange(()=>{ if(CURRENT_TAB==="pipeline") render(); });
+    if(typeof MktStore!=="undefined"){ MktStore.start();
+      MktStore.onChange(()=>{ if(CURRENT_TAB==="marketing") render(); }); }
   } else {
     Store.seed();
   }
@@ -123,8 +125,8 @@ async function boot(){
 }
 function render(){
   const v=$("#view"); v.innerHTML="";
-  ({rooms:renderRooms, pipeline:renderPipeline, packages:renderPackages, suppliers:renderSuppliers, quote:renderQuote,
-    profit:renderProfit, chat:renderChat, mne:renderMnE, admin:renderAdmin }[CURRENT_TAB]||renderRooms)(v);
+  ({rooms:renderRooms, dining:renderDining, pipeline:renderPipeline, packages:renderPackages, suppliers:renderSuppliers, quote:renderQuote,
+    profit:renderProfit, chat:renderChat, mne:renderMnE, marketing:renderMarketing, menu:renderMenuBuilder, admin:renderAdmin }[CURRENT_TAB]||renderRooms)(v);
 }
 
 /* ============================================================ ROOMS */
@@ -317,13 +319,19 @@ function renderPackages(v){
 
 /* ============================================================ QUOTE BUILDER */
 let prefill=null;
-let QUOTE_ROOMS=[]; // array of room-booking line items
+let QUOTE_ROOMS=[]; // array of function/room-booking line items
 function newRoomLine(pre){
-  return { room: pre?.room || ROOMS[0].id, date: pre?.date||"", layout: pre?.layout||"theatre",
-    pax: pre?.pax || 40, hire:"full", pkg:"" };
+  return { fnType: pre?.fnType||"meeting", label: pre?.label||"", time: pre?.time||"",
+    room: pre?.room || ROOMS[0].id, date: pre?.date||"", layout: pre?.layout||"theatre",
+    pax: pre?.pax || 40, hire: pre?.hire||"full", pkg: pre?.pkg||"" };
+}
+function applyEventTemplate(tplId){
+  const tpl=EVENT_TEMPLATES[tplId]; if(!tpl)return;
+  QUOTE_ROOMS=tpl.functions.map(f=>newRoomLine({ fnType:f.type, label:f.label, time:f.time,
+    room:ROOMS[0].id, layout:f.layout, hire:f.hire, pkg:f.pkg, pax:40 }));
 }
 function renderQuote(v){
-  v.appendChild(head("Create a Quote","Build a multi-room quote — add a line for each room or space, with its own day, layout and package. Download a branded brochure or simple quote."));
+  v.appendChild(head("Create a Quote","Build a multi-room, multi-function quote — a line for each function (meeting, lunch, break…) with its own room, time, layout and package. Load an event template to start fast."));
   if(!QUOTE_ROOMS.length) QUOTE_ROOMS=[newRoomLine(prefill)];
   if(prefill){ QUOTE_ROOMS=[newRoomLine(prefill)]; }
   const preEvent = prefill?.event || "wedding";
@@ -342,9 +350,15 @@ function renderQuote(v){
       <div><label>Main event date</label><input id="q-date" type="date"></div>
     </div>
 
+    <div class="tmpl-row" style="margin-top:16px">
+      <label>Event template</label>
+      <select id="q-template"><option value="">Start blank</option>${Object.entries(EVENT_TEMPLATES).map(([k,t])=>`<option value="${k}">${t.label}</option>`).join("")}</select>
+      <button class="btn sm" id="q-applytpl" type="button">Load</button>
+    </div>
+
     <div class="rooms-head">
-      <h3 style="margin-top:22px">Rooms &amp; spaces</h3>
-      <button class="btn sm" id="q-addroom">+ Add room</button>
+      <h3 style="margin-top:22px">Functions &amp; spaces</h3>
+      <button class="btn sm" id="q-addroom">+ Add function</button>
     </div>
     <div id="q-roomlines"></div>
 
@@ -357,6 +371,7 @@ function renderQuote(v){
   right.innerHTML=`<h3>Quote summary</h3><div id="q-summary"></div>
     <button class="btn block" id="q-brochure" style="margin-top:16px">Download brochure &amp; quote</button>
     <button class="btn ghost block" id="q-pdf" style="margin-top:8px">Simple quote only</button>
+    <button class="btn ghost block" id="q-kitchen" style="margin-top:8px">Kitchen / ops sheet</button>
     <button class="btn ghost block" id="q-save" style="margin-top:8px">Save as enquiry</button>`;
   wrap.appendChild(right);
   v.appendChild(wrap);
@@ -378,10 +393,14 @@ function renderQuote(v){
   });
 
   $("#q-addroom").onclick=()=>{ QUOTE_ROOMS.push(newRoomLine()); renderRoomLines(); recalcQuote(); };
+  $("#q-applytpl").onclick=()=>{ const t=$("#q-template").value; if(t){ applyEventTemplate(t);
+    const tpl=EVENT_TEMPLATES[t]; if(tpl && tpl.event) $("#q-event").value=tpl.event;
+    renderRoomLines(); recalcQuote(); } };
   $("#q-event").addEventListener("change",recalcQuote);
   recalcQuote();
   $("#q-pdf").onclick=downloadQuotePDF;
   $("#q-brochure").onclick=downloadBrochurePDF;
+  $("#q-kitchen").onclick=downloadKitchenSheet;
   $("#q-save").onclick=saveQuoteAsEnquiry;
 }
 
@@ -391,10 +410,17 @@ function renderRoomLines(){
   QUOTE_ROOMS.forEach((line,i)=>{
     const room=ROOMS.find(r=>r.id===line.room);
     const tech=room?roomTech(room):{};
+    const ft=FUNCTION_TYPES.find(f=>f.id===line.fnType)||FUNCTION_TYPES[0];
     const card=el("div","room-line");
     card.innerHTML=`
-      <div class="rl-head"><span class="rl-num">Room ${i+1}</span>
+      <div class="rl-head">
+        <span class="rl-num">${ft.icon} Function ${i+1}</span>
         ${QUOTE_ROOMS.length>1?`<button class="rl-del" data-i="${i}" title="Remove">×</button>`:""}</div>
+      <div class="rl-fnrow">
+        <div><label>Function type</label><select data-i="${i}" data-f="fnType">${FUNCTION_TYPES.map(f=>`<option value="${f.id}" ${f.id===line.fnType?"selected":""}>${f.icon} ${f.label}</option>`).join("")}</select></div>
+        <div><label>Label (optional)</label><input type="text" data-i="${i}" data-f="label" value="${(line.label||"").replace(/"/g,'&quot;')}" placeholder="e.g. Morning session"></div>
+        <div><label>Time</label><input type="time" data-i="${i}" data-f="time" value="${line.time||""}"></div>
+      </div>
       <div class="rl-body">
         <img class="rl-img" src="${room?roomImage(room):""}" alt="${room?room.name:""}" loading="lazy" onerror="this.style.display='none'">
         <div class="rl-grid">
@@ -406,12 +432,35 @@ function renderRoomLines(){
           <div><label>Package</label><select data-i="${i}" data-f="pkg"><option value="">Room hire only</option>${PACKAGES.map(p=>`<option value="${p.id}" ${p.id===line.pkg?"selected":""}>${p.name} (${money(p.from)}pp)</option>`).join("")}</select></div>
         </div>
       </div>
-      ${room?`<div class="rl-spec">${room.m2} m²${room.length?` · ${room.length}×${room.width}m`:""} · max ${maxCap(room)} · ${tech.screen||"Screen"}${tech.wirelessShare?" · ClickShare":""}${tech.videoCall?" · Video-call ready":""}</div>`:""}`;
+      ${room?`<div class="rl-spec">${room.m2} m²${room.length?` · ${room.length}×${room.width}m`:""} · max ${maxCap(room)} · ${tech.screen||"Screen"}${tech.wirelessShare?" · ClickShare":""}${tech.videoCall?" · Video-call ready":""}</div>`:""}
+      <div class="rl-menu">
+        <button class="menu-toggle" data-i="${i}" type="button">🍽️ Menu items${(line.menu&&line.menu.length)?` (${line.menu.length})`:""}</button>
+        <div class="menu-panel hidden" id="menu-panel-${i}"></div>
+      </div>`;
     box.appendChild(card);
+  });
+  // menu toggles
+  box.querySelectorAll(".menu-toggle").forEach(b=>b.onclick=()=>{
+    const i=+b.dataset.i; const panel=$("#menu-panel-"+i);
+    panel.classList.toggle("hidden");
+    if(!panel.dataset.built){ panel.innerHTML=Object.entries(MENU_ITEMS).map(([cat,items])=>
+      `<div class="menu-cat"><b>${cat}</b>${items.map(it=>{
+        const on=(QUOTE_ROOMS[i].menu||[]).includes(it);
+        return `<label class="menu-chk"><input type="checkbox" data-mi="${i}" value="${it.replace(/"/g,'&quot;')}" ${on?"checked":""}> ${it}</label>`;
+      }).join("")}</div>`).join("");
+      panel.dataset.built="1";
+      panel.querySelectorAll("input[type=checkbox]").forEach(cb=>cb.onchange=()=>{
+        const ri=+cb.dataset.mi; QUOTE_ROOMS[ri].menu=QUOTE_ROOMS[ri].menu||[];
+        if(cb.checked){ if(!QUOTE_ROOMS[ri].menu.includes(cb.value)) QUOTE_ROOMS[ri].menu.push(cb.value); }
+        else { QUOTE_ROOMS[ri].menu=QUOTE_ROOMS[ri].menu.filter(x=>x!==cb.value); }
+        b.textContent=`🍽️ Menu items${QUOTE_ROOMS[ri].menu.length?` (${QUOTE_ROOMS[ri].menu.length})`:""}`;
+      });
+    }
   });
   box.querySelectorAll("[data-f]").forEach(inp=>inp.addEventListener("input",e=>{
     const i=+e.target.dataset.i, f=e.target.dataset.f;
     QUOTE_ROOMS[i][f] = (f==="pax")? (parseInt(e.target.value)||0) : e.target.value;
+    if(f==="fnType") renderRoomLines();
     recalcQuote();
   }));
   box.querySelectorAll(".rl-del").forEach(b=>b.onclick=()=>{
@@ -419,6 +468,11 @@ function renderRoomLines(){
   });
 }
 
+function fnLabel(line){
+  const ft=FUNCTION_TYPES.find(f=>f.id===line.fnType);
+  const base=line.label|| (ft?ft.label:"Function");
+  return line.time? `${line.time} ${base}` : base;
+}
 function gatherQuote(){
   const evId=$("#q-event").value;
   const lines=[];
@@ -427,10 +481,11 @@ function gatherQuote(){
     const room=ROOMS.find(r=>r.id===line.room); if(!room)return;
     const pax=parseInt(line.pax)||0; totalPax+=pax;
     const dateStr=line.date? " ("+new Date(line.date).toLocaleDateString("en-GB")+")" : "";
+    const fl=fnLabel(line);
     const pkg=PACKAGES.find(p=>p.id===line.pkg);
-    if(pkg){ lines.push({label:`${pkg.name} — ${room.name}${dateStr} × ${pax}`, amt:pkg.from*pax, sub:`${money(pkg.from)}pp`}); }
+    if(pkg){ lines.push({label:`${fl} · ${pkg.name} — ${room.name}${dateStr} × ${pax}`, amt:pkg.from*pax, sub:`${money(pkg.from)}pp`}); }
     if(line.hire!=="none" && ROOM_HIRE[room.id]){
-      lines.push({label:`Room hire — ${room.name} (${line.hire} day)${dateStr}`, amt:ROOM_HIRE[room.id][line.hire]});
+      lines.push({label:`${fl} · Room hire — ${room.name} (${line.hire} day)${dateStr}`, amt:ROOM_HIRE[room.id][line.hire]});
     }
   });
   document.querySelectorAll("#q-addons input").forEach(q=>{
@@ -440,7 +495,6 @@ function gatherQuote(){
     }
   });
   const subtotal=lines.reduce((s,l)=>s+l.amt,0);
-  // carbon: sum across room lines
   let carbonTotal=0;
   QUOTE_ROOMS.forEach(line=>{ const room=ROOMS.find(r=>r.id===line.room);
     if(room) carbonTotal += carbonModel(room,evId,parseInt(line.pax)||0).total; });
@@ -584,8 +638,14 @@ function downloadBrochurePDF(){
     <!-- VENUE + ROOMS -->
     <div class="page">
       <h2>Your event at Brandon Hall</h2><div class="rule"></div>
-      <p class="lead">Set within 17 acres of Warwickshire grounds, Brandon Hall offers elegant spaces for every occasion. Here's our proposal for your ${et.label.toLowerCase()}${q.rooms.length>1?` across ${q.rooms.length} rooms`:""}.</p>
+      ${q.evId==="wedding"?`
+      <p class="lead">${WEDDING_CONTENT.intro}</p>
+      <p class="lead">${WEDDING_CONTENT.suite}</p>
       <div class="grid2">${gallery}</div>
+      <h2 style="font-size:18px;margin-top:18px">Why Brandon Hall</h2><div class="rule"></div>
+      ${WEDDING_CONTENT.reasons.map(r=>`<div class="box" style="padding:12px 16px;margin:8px 0"><b style="font-family:'Cormorant Garamond',serif;font-size:16px;color:#1a2b47">${r.t}</b><div style="font-size:12.5px;color:#3a4256;margin-top:3px">${r.d}</div></div>`).join("")}`
+      :`<p class="lead">Set within 17 acres of Warwickshire grounds, Brandon Hall offers elegant spaces for every occasion. Here's our proposal for your ${et.label.toLowerCase()}${q.rooms.length>1?` across ${q.rooms.length} rooms`:""}.</p>
+      <div class="grid2">${gallery}</div>`}
       <div class="stats">
         <div><b>${q.rooms.length}</b><span>${q.rooms.length>1?"Rooms":"Room"}</span></div>
         <div><b>${q.pax}</b><span>Total guests</span></div>
@@ -611,12 +671,74 @@ function downloadBrochurePDF(){
 function saveQuoteAsEnquiry(){
   const q=gatherQuote();
   if(!q.customer.name){ alert("Please enter the customer name first."); return; }
-  const roomNote = q.rooms.length>1 ? ` · ${q.rooms.length} rooms` : "";
+  const roomNote = q.rooms.length>1 ? ` · ${q.rooms.length} functions` : "";
   DB.add({ name:q.customer.name, email:q.customer.email, phone:q.customer.phone,
     company:q.customer.co, event:q.evId, room:q.rooms[0]?.room||"", pax:q.pax, date:q.customer.date,
-    value:q.subtotal, status:"quoted", source:"quote builder",
+    value:q.subtotal, status:"provisional", source:"quote builder", owner:SESSION?.name||ENQ_OWNERS[0],
     notes:`Quote built: ${money(q.subtotal)}${roomNote} · ${q.pax} guests` });
-  alert("Saved to the enquiry dashboard.");
+  alert("Saved to the pipeline as Provisional.");
+}
+
+/* Kitchen / operations sheet — per-function food, covers, timings & layouts */
+function downloadKitchenSheet(){
+  const q=gatherQuote();
+  if(!q.customer.name){ alert("Please enter the customer name first."); return; }
+  const et=EVENT_TYPES.find(e=>e.id===q.evId);
+  const ref="BH-OPS-"+Date.now().toString(36).toUpperCase();
+  // gather food/beverage add-ons selected
+  const foodItems=[];
+  document.querySelectorAll("#q-addons input").forEach(inp=>{ const n=parseInt(inp.value)||0;
+    if(n>0) foodItems.push({name:inp.dataset.name, qty:n, unit:inp.dataset.unit}); });
+  const fnRows=q.rooms.map((line,i)=>{
+    const room=ROOMS.find(r=>r.id===line.room);
+    const ft=FUNCTION_TYPES.find(f=>f.id===line.fnType);
+    const pkg=PACKAGES.find(p=>p.id===line.pkg);
+    const dateStr=line.date? new Date(line.date).toLocaleDateString("en-GB") : "TBC";
+    const menuStr=(line.menu&&line.menu.length)? `<br><span class="sub">Menu: ${line.menu.join(", ")}</span>` : "";
+    return `<tr>
+      <td>${line.time||"—"}</td>
+      <td><b>${ft?ft.icon+" "+ft.label:"Function"}</b>${line.label?`<br><span class="sub">${line.label}</span>`:""}${menuStr}</td>
+      <td>${room?room.name:"—"}<br><span class="sub">${LAYOUT_LABELS[line.layout]}</span></td>
+      <td style="text-align:center">${line.pax||"—"}</td>
+      <td>${dateStr}</td>
+      <td>${pkg?pkg.name:"—"}</td></tr>`;
+  }).join("");
+  // aggregate menu items across functions (chef quantities)
+  const menuAgg={};
+  q.rooms.forEach(line=>{ if(line.menu) line.menu.forEach(m=>{ menuAgg[m]=(menuAgg[m]||0)+(parseInt(line.pax)||0); }); });
+  const win=window.open("","_blank");
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${ref}</title>
+    <style>@page{margin:16mm}body{font-family:'Inter',Arial,sans-serif;color:#1a2230;font-size:12px}
+    .top{display:flex;justify-content:space-between;border-bottom:3px solid #1a2b47;padding-bottom:10px;margin-bottom:14px}
+    h1{font-family:Georgia,serif;font-size:22px;color:#1a2b47;margin:0}
+    .muted{color:#7a8494;font-size:11px}.sub{color:#7a8494;font-size:10.5px}
+    h2{font-size:13px;color:#9d7d5f;margin:18px 0 6px;text-transform:uppercase;letter-spacing:.5px}
+    table{width:100%;border-collapse:collapse;margin-top:4px}
+    th{background:#1a2b47;color:#fff;text-align:left;padding:7px 8px;font-size:11px}
+    td{padding:7px 8px;border-bottom:1px solid #e3e7ee;vertical-align:top}
+    .info{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px 20px;font-size:12px;margin-bottom:6px}
+    .info b{color:#3a4256}
+    .note{margin-top:24px;font-size:10px;color:#7a8494;border-top:1px solid #e3e7ee;padding-top:10px}</style></head><body>
+    <div class="top"><div><h1>Function / Kitchen Sheet</h1><div class="muted">Brandon Hall Hotel &amp; Spa · Operations</div></div>
+      <div style="text-align:right"><b>${ref}</b><br><span class="muted">${new Date().toLocaleDateString("en-GB")}</span></div></div>
+    <div class="info">
+      <div><b>Client:</b> ${q.customer.name}</div><div><b>Company:</b> ${q.customer.co||"—"}</div><div><b>Event:</b> ${et.label}</div>
+      <div><b>Date:</b> ${q.customer.date?new Date(q.customer.date).toLocaleDateString("en-GB"):"TBC"}</div>
+      <div><b>Total covers:</b> ${q.pax}</div><div><b>Functions:</b> ${q.rooms.length}</div>
+    </div>
+    <h2>Running order</h2>
+    <table><tr><th>Time</th><th>Function</th><th>Room / Layout</th><th>Covers</th><th>Date</th><th>Package</th></tr>${fnRows}</table>
+    ${Object.keys(menuAgg).length?`<h2>Menu — chef quantities</h2>
+      <table><tr><th>Dish</th><th style="text-align:center">Covers</th></tr>
+      ${Object.entries(menuAgg).map(([m,n])=>`<tr><td>${m}</td><td style="text-align:center">${n}</td></tr>`).join("")}</table>`:""}
+    ${foodItems.length?`<h2>Food &amp; beverage items</h2>
+      <table><tr><th>Item</th><th style="text-align:center">Qty</th><th>Unit</th></tr>
+      ${foodItems.map(f=>`<tr><td>${f.name}</td><td style="text-align:center">${f.qty}</td><td>${f.unit}</td></tr>`).join("")}</table>`:""}
+    <h2>Notes for kitchen &amp; ops</h2>
+    <table><tr><td style="height:80px;color:#7a8494">Dietary requirements, service timings, allergen notes, special requests…</td></tr></table>
+    <div class="note">Internal operations document. English beef/lamb, English pork, British dairy where specified. Confirm final numbers 72h before event.</div>
+    <script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script></body></html>`);
+  win.document.close();
 }
 
 /* ============================================================ SALES PIPELINE (merged) */
@@ -673,6 +795,40 @@ function renderPipeline(v){
     <div class="stat-card"><div class="sc-v">${allRaw.length}</div><div class="sc-k">Total records</div></div>
     <div class="stat-card"><div class="sc-v" style="${overdue?'color:#b3261e':''}">${overdue}</div><div class="sc-k">Follow-ups overdue</div></div>`;
   v.appendChild(kpis);
+
+  // ---- conversion report + lost reasons ----
+  const confN=confAll.length, cancN=allRaw.filter(e=>e.status==="cancelled").length;
+  const decided=confN+cancN;
+  const convRate=decided? Math.round(confN/decided*100):0;
+  const lostReasons={};
+  allRaw.filter(e=>e.status==="cancelled"&&e.lostReason).forEach(e=>{ lostReasons[e.lostReason]=(lostReasons[e.lostReason]||0)+1; });
+  const conv=el("div","conv-strip");
+  conv.innerHTML=`<div class="conv-main">
+      <div class="conv-rate"><span class="cr-v">${convRate}%</span><span class="cr-k">Win rate (of decided)</span></div>
+      <div class="conv-bar"><span class="cb-won" style="flex:${confN||0.001}" title="Won ${confN}"></span><span class="cb-lost" style="flex:${cancN||0.001}" title="Lost ${cancN}"></span></div>
+      <div class="conv-nums"><span class="cn-won">${confN} won</span> · <span class="cn-lost">${cancN} lost</span></div>
+    </div>
+    ${Object.keys(lostReasons).length?`<div class="lost-reasons"><span class="lr-label">Lost reasons:</span>${Object.entries(lostReasons).sort((a,b)=>b[1]-a[1]).map(([r,n])=>`<span class="lr-pill">${r} <b>${n}</b></span>`).join("")}</div>`:`<div class="lost-reasons"><span class="lr-label" style="color:var(--muted)">Set a lost reason when marking an enquiry Cancelled to build this breakdown.</span></div>`}`;
+  v.appendChild(conv);
+
+  // ---- my tasks due ----
+  const today2=new Date().toISOString().slice(0,10);
+  const tasksDue=[];
+  allRaw.forEach(e=>{ (e.checklist||[]).forEach(t=>{ if(!t.done && t.due && t.due<=today2)
+    tasksDue.push({name:e.name, task:t.task, due:t.due, id:e.id, overdue:t.due<today2}); }); });
+  if(tasksDue.length){
+    tasksDue.sort((a,b)=>a.due<b.due?-1:1);
+    const td=el("div","tasks-due");
+    td.innerHTML=`<div class="sec-title" style="margin-top:0">📋 Tasks due (${tasksDue.length})</div>`+
+      tasksDue.slice(0,8).map(t=>`<div class="task-row" data-id="${t.id}">
+        <span class="tr-task ${t.overdue?"overdue":""}">${t.overdue?"⚠ ":""}${t.task}</span>
+        <span class="tr-name">${t.name}</span>
+        <span class="tr-due">${new Date(t.due).toLocaleDateString("en-GB")}</span></div>`).join("")+
+      (tasksDue.length>8?`<div class="qs-sub" style="margin-top:6px">+${tasksDue.length-8} more</div>`:"");
+    v.appendChild(td);
+    td.querySelectorAll(".task-row").forEach(row=>row.onclick=()=>{
+      const e=allRaw.find(x=>x.id===row.dataset.id); if(e) openEnquiryDetail(e); });
+  }
 
   // ---- charts (clickable → set room/owner filter) ----
   const chartBase=allRaw.filter(e=>["enquiry","provisional","confirmed"].includes(e.status));
@@ -831,6 +987,7 @@ function openEnquiryDetail(e){
       <div><label>Event date</label><input id="m-date" type="date" value="${/^\d{4}-\d{2}-\d{2}/.test(e.date||"")?e.date.slice(0,10):""}"></div>
       <div><label>Follow-up</label><input id="m-followup" type="date" value="${e.followUp||""}"></div>
       <div><label>Source</label><select id="m-source">${ENQ_SOURCES.map(s=>`<option ${e.source===s?"selected":""}>${s}</option>`).join("")}</select></div>
+      <div id="m-lostwrap" class="${e.status==="cancelled"?"":"hidden"}"><label>Lost reason</label><select id="m-lost">${LOST_REASONS.map(r=>`<option ${e.lostReason===r?"selected":""}>${r}</option>`).join("")}</select></div>
     </div>
     <button class="btn sm" id="m-save" style="margin-top:10px">Save changes</button>
 
@@ -838,6 +995,10 @@ function openEnquiryDetail(e){
     <p style="font-size:14px">${e.email||"—"} · ${e.phone||"—"} ${e.company?" · "+e.company:""}</p>`:""}
     ${(e.budget||e.accommodation)?`<p style="font-size:14px;color:var(--muted)">${e.budget?`Budget: ${e.budget} · `:""}${e.accommodation?`Accommodation: ${e.accommodation}`:""}</p>`:""}
     ${e.notes?`<div class="sec-title">Notes</div><p style="font-size:14px;line-height:1.6">${e.notes}</p>`:""}
+
+    <div class="sec-title">Task checklist ${e._kind==="bob"?"":`<button class="mini-btn" id="m-genlist">${(e.checklist&&e.checklist.length)?"Regenerate":"Generate"}</button>`}</div>
+    <div id="m-checklist"></div>
+
     ${e.costing?`<div class="sec-title">Profitability</div>
       <div class="enq-costing">
         <div><span class="ec-v">${money(Math.round(e.costing.profit))}</span><span class="ec-k">Est. profit</span></div>
@@ -851,12 +1012,45 @@ function openEnquiryDetail(e){
     </div>
     <div class="qs-sub" style="margin-top:14px">Ref ${e.ref||e.id} · ${e.owner?`owned by ${e.owner}`:""}</div>`;
   showModal(e.name, `${et?et.label:(e.ratePlan||"Enquiry")} · ${isBob?"BOB / Rezlynx":(e.source||"manual")}`, body);
+
+  // show/hide lost reason on stage change
+  $("#m-stage").onchange=()=>{ $("#m-lostwrap").classList.toggle("hidden", $("#m-stage").value!=="cancelled"); };
+
+  // checklist rendering
+  let checklist = (e.checklist||[]).slice();
+  function drawChecklist(){
+    const box=$("#m-checklist"); if(!box)return;
+    if(!checklist.length){ box.innerHTML=`<p class="qs-sub">No tasks yet${e._kind==="bob"?" (promote to a managed enquiry to add tasks)":" — Generate from the event type."}</p>`; return; }
+    const today=new Date().toISOString().slice(0,10);
+    box.innerHTML=`<div class="checklist">`+checklist.map((t,i)=>{
+      const overdue=!t.done && t.due && t.due<today;
+      return `<div class="chk-row ${t.done?"done":""}">
+        <input type="checkbox" data-i="${i}" ${t.done?"checked":""}>
+        <span class="chk-task">${t.task}</span>
+        <span class="chk-due ${overdue?"overdue":""}">${t.due?new Date(t.due).toLocaleDateString("en-GB"):""}</span>
+      </div>`; }).join("")+`</div>`;
+    box.querySelectorAll("input[type=checkbox]").forEach(cb=>cb.onchange=()=>{
+      checklist[+cb.dataset.i].done=cb.checked; drawChecklist(); });
+  }
+  drawChecklist();
+  if($("#m-genlist")) $("#m-genlist").onclick=()=>{
+    const bookingDate=new Date(e.created||Date.now());
+    const evDate = /^\d{4}-\d{2}-\d{2}/.test(e.date||"")? new Date(e.date) : null;
+    checklist = checklistFor(e.event).map(t=>{
+      let due;
+      if(t.fromBooking){ due=new Date(bookingDate); due.setDate(due.getDate()+Math.abs(t.offset)); }
+      else if(evDate){ due=new Date(evDate); due.setDate(due.getDate()-t.offset); }
+      return { task:t.task, due: due? due.toISOString().slice(0,10):"", done:false };
+    });
+    drawChecklist();
+  };
+
   $("#m-save").onclick=()=>{
     const patch={ owner:$("#m-owner").value, status:$("#m-stage").value,
       value:parseFloat($("#m-value").value)||0, date:$("#m-date").value||e.date,
-      followUp:$("#m-followup").value, source:$("#m-source").value };
+      followUp:$("#m-followup").value, source:$("#m-source").value, checklist };
+    if($("#m-stage").value==="cancelled") patch.lostReason=$("#m-lost").value;
     if(isBob){
-      // promote BOB record into the live managed store
       DB.add(Object.assign({ name:e.name, pax:e.pax, room:e.room, roomName:e.roomName,
         ratePlan:e.ratePlan, ref:e.ref, notes:e.notes, event:e.event||"" }, patch));
     } else {
@@ -1142,8 +1336,12 @@ function renderProfit(v){
       <div class="elem-grid" id="p-elements"></div>
       <div class="elem-total" id="p-elemtotal"></div>
 
-      <h3 style="margin-top:20px">Payroll</h3>
+      <div class="pay-head" style="display:flex;align-items:center;justify-content:space-between;margin-top:20px">
+        <h3 style="margin:0">Event staffing</h3>
+        <button class="btn sm" id="p-addrole" type="button">+ Add role</button>
+      </div>
       <table class="pay-table" id="p-payroll"></table>
+      <div class="pay-total" id="p-paytotal"></div>
 
       <h3 style="margin-top:20px">Controllable costs <span class="qs-sub">(net of VAT, not recharged)</span></h3>
       <div class="elem-grid" id="p-controllable"></div>
@@ -1176,18 +1374,14 @@ function renderProfit(v){
   const ctrlLabels={ equipment:"Equipment rental", linen:"Linen costs", security:"Security", other:"Other" };
   $("#p-controllable").innerHTML=Object.entries(ctrlLabels).map(([k,l])=>
     `<div class="elem-row"><label>${l}</label><input type="number" data-ctrl="${k}" value="${PROFIT.controllable[k]}" step="1"></div>`).join("");
-  // payroll table
-  $("#p-payroll").innerHTML=`<tr><th>Role</th><th>£/hr</th><th>Staff</th><th>Hours</th><th>Cost</th></tr>`+
-    PROFIT.payroll.map((p,i)=>`<tr>
-      <td>${p.role}</td>
-      <td><input type="number" data-pay="${i}" data-f="rate" value="${p.rate}" step="0.5"></td>
-      <td><input type="number" data-pay="${i}" data-f="staff" value="${p.staff}"></td>
-      <td><input type="number" data-pay="${i}" data-f="hours" value="${p.hours}"></td>
-      <td data-paycost="${i}">—</td></tr>`).join("");
+  // payroll / staffing table
+  renderPayrollTable();
 
   // wire all inputs
   v.querySelectorAll("input").forEach(i=>i.addEventListener("input",calcProfit));
   $("#p-apply").onclick=()=>{ applyTemplate($("#p-template").value); switchTab("profit"); };
+  $("#p-addrole").onclick=()=>{ PROFIT.payroll.push({role:"New role",rate:13,staff:1,hours:8});
+    renderPayrollTable(); calcProfit(); };
   $("#p-print").onclick=printProfit;
   $("#p-scenario").onclick=saveScenario;
   if($("#p-save")) $("#p-save").onclick=()=>{
@@ -1224,6 +1418,24 @@ function renderScenarios(){
   box.querySelectorAll(".sc-del").forEach(b=>b.onclick=()=>{ ScenarioStore.remove(b.dataset.id); renderScenarios(); });
 }
 
+function renderPayrollTable(){
+  const box=$("#p-payroll"); if(!box)return;
+  box.innerHTML=`<tr><th>Role</th><th>£/hr</th><th>Staff</th><th>Hrs</th><th>Cost</th><th></th></tr>`+
+    PROFIT.payroll.map((p,i)=>`<tr>
+      <td><input type="text" class="role-name" data-pay="${i}" data-f="role" value="${(p.role||"").replace(/"/g,'&quot;')}"></td>
+      <td><input type="number" data-pay="${i}" data-f="rate" value="${p.rate}" step="0.5"></td>
+      <td><input type="number" data-pay="${i}" data-f="staff" value="${p.staff}"></td>
+      <td><input type="number" data-pay="${i}" data-f="hours" value="${p.hours}"></td>
+      <td data-paycost="${i}">—</td>
+      <td><button class="pay-del" data-i="${i}" type="button" title="Remove">×</button></td></tr>`).join("");
+  box.querySelectorAll("input").forEach(inp=>inp.addEventListener("input",e=>{
+    const i=+e.target.dataset.pay, f=e.target.dataset.f;
+    if(f==="role") PROFIT.payroll[i].role=e.target.value; // keep in state so it survives re-render
+    calcProfit();
+  }));
+  box.querySelectorAll(".pay-del").forEach(b=>b.onclick=()=>{
+    PROFIT.payroll.splice(+b.dataset.i,1); renderPayrollTable(); calcProfit(); });
+}
 function gatherProfit(){
   const num=id=>parseFloat($(id)?.value)||0;
   const price=num("#p-price"), covers=num("#p-covers"), bevPP=num("#p-bev");
@@ -1251,6 +1463,9 @@ function gatherProfit(){
   // payroll
   const payrollCost=payroll.reduce((s,p)=>s+p.rate*p.staff*p.hours,0);
   payroll.forEach((p,i)=>{ const cell=document.querySelector(`[data-paycost="${i}"]`); if(cell)cell.textContent=money(p.rate*p.staff*p.hours); });
+  const ptt=$("#p-paytotal");
+  if(ptt){ const heads=payroll.reduce((s,p)=>s+p.staff,0);
+    ptt.innerHTML=`<b>${heads}</b> staff · <b>${money(Math.round(payrollCost))}</b> total labour${covers?` · ${money(Math.round(payrollCost/covers))}/cover`:""}`; }
   const ctrlTotal=Object.values(controllable).reduce((a,b)=>a+b,0);
   const commCost=Math.round(netRev*comm*100)/100;
   const profit=netRev-cosTotal-payrollCost-ctrlTotal-commCost;
@@ -1511,6 +1726,240 @@ function pieChart(data){
     ${d.label.length>16?d.label.slice(0,15)+"…":d.label} <b>${Math.round(d.val/total*100)}%</b></div>`).join("");
   return `<div class="pie-wrap"><svg viewBox="0 0 180 180" style="width:160px;flex-shrink:0" xmlns="http://www.w3.org/2000/svg">${slices}</svg>
     <div class="pie-legend">${legend}</div></div>`;
+}
+
+/* ============================================================ MARKETING LIBRARY */
+let MKT_SECTION="logos";
+function renderMarketing(v){
+  v.appendChild(head("Marketing Library","All Brandon Hall marketing content in one place — browse, download and upload to each section."));
+
+  // section nav
+  const nav=el("div","mkt-nav");
+  MKT_SECTIONS.forEach(s=>{
+    const uploaded = (typeof MktStore!=="undefined" && MktStore.live)? MktStore.items(s.id).length : 0;
+    const count=(MKT_ASSETS[s.id]?.length||0)+uploaded;
+    const b=el("button","mkt-tab"+(MKT_SECTION===s.id?" on":""),`${s.icon} ${s.label} <span class="mkt-n">${count}</span>`);
+    b.onclick=()=>{ MKT_SECTION=s.id; render(); };
+    nav.appendChild(b);
+  });
+  v.appendChild(nav);
+
+  const sec=MKT_SECTIONS.find(s=>s.id===MKT_SECTION);
+  const head2=el("div","mkt-head");
+  head2.innerHTML=`<div><h3>${sec.icon} ${sec.label}</h3><p class="qs-sub">${sec.desc}</p></div>
+    <button class="btn" id="mkt-upload">⬆ Upload to ${sec.label}</button>`;
+  v.appendChild(head2);
+  $("#mkt-upload").onclick=()=>openUploadForm(MKT_SECTION);
+
+  // grid: baked-in + uploaded
+  const baked=(MKT_ASSETS[MKT_SECTION]||[]).map(a=>Object.assign({_baked:true},a));
+  const uploaded=(typeof MktStore!=="undefined" && MktStore.live)? MktStore.items(MKT_SECTION) : [];
+  const items=[...uploaded, ...baked];
+  if(!items.length){
+    v.appendChild(el("div","empty",`<div class="big">Nothing here yet</div>Upload your first ${sec.label.toLowerCase()} asset.`));
+    return;
+  }
+  const grid=el("div","mkt-grid");
+  items.forEach(a=>{
+    const url=a.url||a.file;
+    const card=el("div","mkt-card");
+    let preview;
+    if(a.type==="image"||a.type==="svg"){
+      preview=`<div class="mkt-prev ${a.dark?"dark":""}"><img src="${url}" loading="lazy" onerror="this.parentElement.classList.add('noimg')"></div>`;
+    } else if(a.type==="pdf"){
+      preview=`<div class="mkt-prev">${a.thumb?`<img src="${a.thumb}" loading="lazy">`:`<div class="mkt-ico">📄</div>`}</div>`;
+    } else if(a.type==="video"){
+      preview=`<div class="mkt-prev"><div class="mkt-ico">🎬</div></div>`;
+    } else if(a.type==="link"){
+      preview=`<div class="mkt-prev">${a.thumb?`<img src="${a.thumb}" loading="lazy">`:`<div class="mkt-ico">▶️</div>`}</div>`;
+    } else {
+      preview=`<div class="mkt-prev"><div class="mkt-ico">📎</div></div>`;
+    }
+    card.innerHTML=`${preview}
+      <div class="mkt-body">
+        <div class="mkt-name">${a.name}</div>
+        <div class="mkt-meta">${a.type.toUpperCase()}${a.size?` · ${(a.size/1024/1024).toFixed(1)}MB`:""}${a.by?` · ${a.by}`:""}</div>
+        <div class="mkt-actions">
+          <a class="mkt-btn" href="${url}" target="_blank">${a.type==="link"?"▶ Launch":"View"}</a>
+          ${a.type!=="link"?`<a class="mkt-btn" href="${url}" download>Download</a>`:""}
+          ${!a._baked?`<button class="mkt-btn del" data-id="${a.id}" data-path="${a.path||""}">Remove</button>`:""}
+        </div>
+      </div>`;
+    grid.appendChild(card);
+  });
+  v.appendChild(grid);
+  grid.querySelectorAll(".del").forEach(b=>b.onclick=async()=>{
+    if(confirm("Remove this asset?")){ await MktStore.remove(b.dataset.id,b.dataset.path); render(); }
+  });
+}
+function openUploadForm(section){
+  const sec=MKT_SECTIONS.find(s=>s.id===section);
+  const live=(typeof MktStore!=="undefined" && MktStore.live);
+  const body=`
+    ${!live?`<div class="admin-note">Uploads need Firebase Storage enabled. In demo mode you can preview the picker, but files won't save until the portal is live. See README.</div>`:""}
+    <div class="form-grid">
+      <div class="full"><label>Display name (optional)</label><input id="up-name" placeholder="e.g. Summer Spa Flyer"></div>
+      <div class="full"><label>File</label><input id="up-file" type="file"></div>
+    </div>
+    <div id="up-status" class="qs-sub" style="margin-top:10px"></div>
+    <div style="margin-top:16px"><button class="btn" id="up-go">Upload to ${sec.label}</button></div>`;
+  showModal(`Upload — ${sec.label}`,"Add a marketing asset",body);
+  $("#up-go").onclick=async()=>{
+    const f=$("#up-file").files[0];
+    if(!f){ $("#up-status").textContent="Choose a file first."; return; }
+    if(!live){ $("#up-status").innerHTML=`<span style="color:var(--warn)">Demo mode — connect Firebase Storage to save uploads.</span>`; return; }
+    $("#up-status").textContent="Uploading…"; $("#up-go").disabled=true;
+    try{ await MktStore.upload(section, f, $("#up-name").value.trim());
+      closeModal(); render();
+    }catch(e){ $("#up-status").innerHTML=`<span style="color:#b3261e">Upload failed: ${e.message}</span>`; $("#up-go").disabled=false; }
+  };
+}
+
+/* ============================================================ DINING & BARS */
+let DINING_AREA="restaurant";
+function renderDining(v){
+  v.appendChild(head("Dining & Bars","Our restaurant, bar and terrace — seating plans, capacities and features."));
+  const nav=el("div","mkt-nav");
+  DINING_AREAS.forEach(a=>{
+    const b=el("button","mkt-tab"+(DINING_AREA===a.id?" on":""),`${a.name} <span class="mkt-n">${a.covers}</span>`);
+    b.onclick=()=>{ DINING_AREA=a.id; render(); };
+    nav.appendChild(b);
+  });
+  v.appendChild(nav);
+
+  const area=DINING_AREAS.find(a=>a.id===DINING_AREA);
+  const panel=el("div","quote-panel");
+  panel.innerHTML=`
+    <div class="detail-row">
+      <div class="stat"><div class="k">Covers</div><div class="v">${area.covers}</div></div>
+      <div class="stat" style="flex:3"><div class="k">${area.name}</div><div class="v" style="font-size:15px;font-family:var(--sans);font-weight:400;color:var(--ink-2)">${area.desc}</div></div>
+    </div>
+    <div class="sec-title">Features</div>
+    <div class="chips">${area.features.map(f=>`<span class="chip" style="cursor:default">${f}</span>`).join("")}</div>
+    ${area.tables.length?`
+      <div class="sec-title">Seating plan</div>
+      ${area.key.length?`<div class="rest-key">${area.key.map(([,label])=>`<span>${label}</span>`).join("")}</div>`:""}
+      <div class="rest-plan">${restaurantSVG(area)}</div>
+      <div class="qs-sub" style="margin-top:8px">${area.tables.length} tables · ${area.covers} covers · tables 201–223</div>
+    `:`<div class="sec-title">Seating plan</div><p class="qs-sub">Flexible layout — no fixed plan. Capacity ${area.covers}.</p>`}`;
+  v.appendChild(panel);
+}
+
+/* ============================================================ MENU BUILDER */
+let MENU={ title:"Set Dinner Menu", subtitle:"", courses:[
+  { name:"Starters", items:[] },
+  { name:"Mains", items:[] },
+  { name:"Desserts", items:[] }
+], price:"", footer:"All dishes prepared using English beef & lamb, English pork and British dairy. Please advise of any allergies or dietary requirements." };
+
+function renderMenuBuilder(v){
+  v.appendChild(head("Menu Builder","Build a menu on the fly, then produce printable artwork to send or print."));
+  const wrap=el("div","quote-layout");
+
+  // left: editor
+  const left=el("div","quote-panel");
+  left.innerHTML=`<h3>Menu details</h3>
+    <div class="form-grid">
+      <div><label>Menu title</label><input id="mn-title" value="${MENU.title.replace(/"/g,'&quot;')}"></div>
+      <div><label>Subtitle (optional)</label><input id="mn-sub" value="${(MENU.subtitle||'').replace(/"/g,'&quot;')}" placeholder="e.g. Wedding Breakfast"></div>
+      <div><label>Price (optional)</label><input id="mn-price" value="${(MENU.price||'').replace(/"/g,'&quot;')}" placeholder="e.g. £35 per person"></div>
+    </div>
+    <div id="mn-courses"></div>
+    <button class="btn ghost sm" id="mn-addcourse" style="margin-top:12px">+ Add course</button>
+    <div style="margin-top:16px"><label>Footer note</label><textarea id="mn-footer" rows="2">${MENU.footer}</textarea></div>`;
+  wrap.appendChild(left);
+
+  // right: live preview + actions
+  const right=el("div","quote-panel");
+  right.innerHTML=`<h3>Preview</h3><div id="mn-preview" class="menu-preview"></div>
+    <div class="dual-btn"><button class="btn" id="mn-print">Printable artwork</button>
+    <button class="btn ghost" id="mn-reset">Reset</button></div>`;
+  wrap.appendChild(right);
+  v.appendChild(wrap);
+
+  renderMenuCourses();
+  ["mn-title","mn-sub","mn-price","mn-footer"].forEach(id=>$("#"+id).addEventListener("input",()=>{
+    MENU.title=$("#mn-title").value; MENU.subtitle=$("#mn-sub").value;
+    MENU.price=$("#mn-price").value; MENU.footer=$("#mn-footer").value; renderMenuPreview(); }));
+  $("#mn-addcourse").onclick=()=>{ MENU.courses.push({name:"New course",items:[]}); renderMenuCourses(); renderMenuPreview(); };
+  $("#mn-print").onclick=printMenu;
+  $("#mn-reset").onclick=()=>{ MENU={ title:"Set Dinner Menu", subtitle:"", courses:[
+    {name:"Starters",items:[]},{name:"Mains",items:[]},{name:"Desserts",items:[]}], price:"",
+    footer:MENU.footer }; switchTab("menu"); };
+  renderMenuPreview();
+}
+function renderMenuCourses(){
+  const box=$("#mn-courses"); if(!box)return; box.innerHTML="";
+  MENU.courses.forEach((course,ci)=>{
+    const card=el("div","menu-course");
+    card.innerHTML=`<div class="mc-head">
+        <input class="mc-name" data-ci="${ci}" value="${course.name.replace(/"/g,'&quot;')}">
+        <button class="mc-del" data-ci="${ci}" title="Remove course">×</button></div>
+      <div class="mc-items" id="mc-items-${ci}"></div>
+      <button class="mc-additem" data-ci="${ci}">+ Add dish</button>`;
+    box.appendChild(card);
+    const itemsBox=card.querySelector(`#mc-items-${ci}`);
+    course.items.forEach((it,ii)=>{
+      const row=el("div","mc-item");
+      row.innerHTML=`<input class="mi-name" data-ci="${ci}" data-ii="${ii}" value="${(it.name||'').replace(/"/g,'&quot;')}" placeholder="Dish name">
+        <input class="mi-desc" data-ci="${ci}" data-ii="${ii}" value="${(it.desc||'').replace(/"/g,'&quot;')}" placeholder="Description (optional)">
+        <button class="mi-del" data-ci="${ci}" data-ii="${ii}">×</button>`;
+      itemsBox.appendChild(row);
+    });
+  });
+  // wire
+  box.querySelectorAll(".mc-name").forEach(i=>i.oninput=e=>{ MENU.courses[+e.target.dataset.ci].name=e.target.value; renderMenuPreview(); });
+  box.querySelectorAll(".mc-del").forEach(b=>b.onclick=()=>{ MENU.courses.splice(+b.dataset.ci,1); renderMenuCourses(); renderMenuPreview(); });
+  box.querySelectorAll(".mc-additem").forEach(b=>b.onclick=()=>{ MENU.courses[+b.dataset.ci].items.push({name:"",desc:""}); renderMenuCourses(); renderMenuPreview(); });
+  box.querySelectorAll(".mi-name").forEach(i=>i.oninput=e=>{ MENU.courses[+e.target.dataset.ci].items[+e.target.dataset.ii].name=e.target.value; renderMenuPreview(); });
+  box.querySelectorAll(".mi-desc").forEach(i=>i.oninput=e=>{ MENU.courses[+e.target.dataset.ci].items[+e.target.dataset.ii].desc=e.target.value; renderMenuPreview(); });
+  box.querySelectorAll(".mi-del").forEach(b=>b.onclick=()=>{ MENU.courses[+b.dataset.ci].items.splice(+b.dataset.ii,1); renderMenuCourses(); renderMenuPreview(); });
+}
+function renderMenuPreview(){
+  const box=$("#mn-preview"); if(!box)return;
+  box.innerHTML=`
+    <div class="mp-logo">BRANDON HALL</div>
+    <div class="mp-sub2">HOTEL &amp; SPA</div>
+    <h2 class="mp-title">${MENU.title||""}</h2>
+    ${MENU.subtitle?`<div class="mp-subtitle">${MENU.subtitle}</div>`:""}
+    ${MENU.courses.map(c=>`
+      ${c.items.filter(i=>i.name).length?`<div class="mp-course">${c.name}</div>`:""}
+      ${c.items.filter(i=>i.name).map(i=>`<div class="mp-dish"><span class="mp-dn">${i.name}</span>${i.desc?`<span class="mp-dd">${i.desc}</span>`:""}</div>`).join("")}
+    `).join("")}
+    ${MENU.price?`<div class="mp-price">${MENU.price}</div>`:""}
+    ${MENU.footer?`<div class="mp-footer">${MENU.footer}</div>`:""}`;
+}
+function printMenu(){
+  const win=window.open("","_blank");
+  const courses=MENU.courses.map(c=>{
+    const items=c.items.filter(i=>i.name); if(!items.length)return"";
+    return `<div class="course">${c.name}</div>`+items.map(i=>`<div class="dish"><div class="dn">${i.name}</div>${i.desc?`<div class="dd">${i.desc}</div>`:""}</div>`).join("");
+  }).join("");
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${MENU.title}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+    <style>@page{margin:0}body{margin:0;font-family:'Inter',serif;color:#1a2230}
+    .menu{max-width:148mm;min-height:210mm;margin:0 auto;padding:26mm 22mm;text-align:center;
+      background:linear-gradient(180deg,#fff,#faf8f4)}
+    .logo{font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:600;letter-spacing:3px;color:#1a2b47}
+    .sub2{font-size:10px;letter-spacing:4px;color:#BB9979;margin-bottom:30px}
+    h1{font-family:'Cormorant Garamond',serif;font-size:30px;font-weight:600;margin:0 0 4px;color:#1a2b47}
+    .subtitle{font-style:italic;color:#7a8494;font-size:14px;margin-bottom:26px}
+    .course{font-family:'Cormorant Garamond',serif;font-size:17px;font-weight:600;color:#BB9979;
+      margin:26px 0 12px;text-transform:uppercase;letter-spacing:2px;position:relative}
+    .course::before,.course::after{content:"";position:absolute;top:50%;width:40px;height:1px;background:#e0d5c5}
+    .course::before{left:calc(50% - 90px)}.course::after{right:calc(50% - 90px)}
+    .dish{margin-bottom:14px}.dn{font-family:'Cormorant Garamond',serif;font-size:16px;color:#1a2230}
+    .dd{font-size:12px;color:#7a8494;font-style:italic;margin-top:2px}
+    .price{font-family:'Cormorant Garamond',serif;font-size:20px;color:#1a2b47;margin:28px 0 0;font-weight:600}
+    .footer{font-size:9.5px;color:#9aa2ad;margin-top:34px;border-top:1px solid #e8dccf;padding-top:14px;line-height:1.5}</style>
+    </head><body><div class="menu">
+      <div class="logo">BRANDON HALL</div><div class="sub2">HOTEL &amp; SPA</div>
+      <h1>${MENU.title||""}</h1>${MENU.subtitle?`<div class="subtitle">${MENU.subtitle}</div>`:""}
+      ${courses}
+      ${MENU.price?`<div class="price">${MENU.price}</div>`:""}
+      ${MENU.footer?`<div class="footer">${MENU.footer}</div>`:""}
+    </div><script>window.onload=()=>setTimeout(()=>window.print(),400)<\/script></body></html>`);
+  win.document.close();
 }
 
 /* ============================================================ HELPERS */

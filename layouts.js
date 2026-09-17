@@ -98,3 +98,51 @@ function seatingSVG(room, layout, pax){
     <text x="${vbw-PAD}" y="${vbh-PAD+18}" font-size="9" fill="#8a8178" text-anchor="end">${LAYOUT_INFO[layout].label} · seats ${cap}</text>
   </svg>`;
 }
+
+/* ============================================================
+   RESTAURANT SEATING PLAN — renders numbered tables to scale
+   ============================================================ */
+function restaurantSVG(area){
+  if(!area.tables || !area.tables.length) return "";
+  const cols=6, rows=4, cellW=95, cellH=88, padX=30, padT=54, padB=30;
+  const W=cols*cellW+padX*2, H=rows*cellH+padT+padB;
+  const CH="#c9d1dd", CHE="#8a97ab", TB="#e8ddc9", TBE="#c9b896", BUF="#dce8dc";
+
+  function chairs(cx,cy,shape,seats,tw,th){
+    let out="";
+    if(shape==="round"){
+      for(let i=0;i<seats;i++){ const a=(i/seats)*Math.PI*2-Math.PI/2;
+        out+=`<circle cx="${(cx+Math.cos(a)*(tw*0.62)).toFixed(1)}" cy="${(cy+Math.sin(a)*(tw*0.62)).toFixed(1)}" r="4" fill="${CH}" stroke="${CHE}" stroke-width=".7"/>`; }
+    } else if(shape==="long"){
+      const per=seats/2, gap=tw/(per+1);
+      for(let i=0;i<per;i++){ const x=cx-tw/2+gap*(i+1);
+        out+=`<rect x="${x-4}" y="${cy-th/2-9}" width="8" height="7" rx="2" fill="${CH}" stroke="${CHE}" stroke-width=".7"/>`;
+        out+=`<rect x="${x-4}" y="${cy+th/2+2}" width="8" height="7" rx="2" fill="${CH}" stroke="${CHE}" stroke-width=".7"/>`; }
+    } else { // square: 1 per side
+      out+=`<rect x="${cx-4}" y="${cy-th/2-9}" width="8" height="7" rx="2" fill="${CH}" stroke="${CHE}" stroke-width=".7"/>`;
+      out+=`<rect x="${cx-4}" y="${cy+th/2+2}" width="8" height="7" rx="2" fill="${CH}" stroke="${CHE}" stroke-width=".7"/>`;
+      out+=`<rect x="${cx-tw/2-9}" y="${cy-4}" width="7" height="8" rx="2" fill="${CH}" stroke="${CHE}" stroke-width=".7"/>`;
+      out+=`<rect x="${cx+tw/2+2}" y="${cy-4}" width="7" height="8" rx="2" fill="${CH}" stroke="${CHE}" stroke-width=".7"/>`;
+    }
+    return out;
+  }
+  const tables=area.tables.map(t=>{
+    const cx=padX+t.c*cellW+cellW/2, cy=padT+t.r*cellH+cellH/2;
+    let tw,th,shapeEl;
+    if(t.shape==="round"){ tw=th=34; shapeEl=`<circle cx="${cx}" cy="${cy}" r="17" fill="${t.buffet?BUF:TB}" stroke="${TBE}" stroke-width="1.2"/>`; }
+    else if(t.shape==="long"){ tw=56; th=26; shapeEl=`<rect x="${cx-tw/2}" y="${cy-th/2}" width="${tw}" height="${th}" rx="4" fill="${t.buffet?BUF:TB}" stroke="${TBE}" stroke-width="1.2"/>`; }
+    else { tw=34; th=30; shapeEl=`<rect x="${cx-tw/2}" y="${cy-th/2}" width="${tw}" height="${th}" rx="4" fill="${t.buffet?BUF:TB}" stroke="${TBE}" stroke-width="1.2"/>`; }
+    return `<g>${shapeEl}${chairs(cx,cy,t.shape,t.seats,tw,th)}
+      <text x="${cx}" y="${cy-1}" font-size="9" font-weight="600" fill="#3a4256" text-anchor="middle">${t.n}</text>
+      <text x="${cx}" y="${cy+8}" font-size="6.5" fill="#7a8494" text-anchor="middle">${t.seats}</text></g>`;
+  }).join("");
+
+  return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;background:#fbfaf7;border-radius:10px">
+    <rect x="${padX-8}" y="${padT-8}" width="${W-padX*2+16}" height="${H-padT-padB+16}" rx="6" fill="#fff" stroke="#d9cfc0" stroke-width="1.5"/>
+    <text x="${padX}" y="26" font-size="10" font-weight="600" fill="#9b7d4f">KITCHEN IN</text>
+    <text x="${W-padX}" y="26" font-size="10" font-weight="600" fill="#9b7d4f" text-anchor="end">KITCHEN OUT</text>
+    <rect x="${padX-8}" y="${H-padB-2}" width="${W-padX*2+16}" height="14" rx="4" fill="#eef2f8"/>
+    <text x="${W/2}" y="${H-padB+8}" font-size="8.5" fill="#3a6ea5" text-anchor="middle">SERVICE COUNTER · HOST · ENTRANCE</text>
+    ${tables}
+  </svg>`;
+}

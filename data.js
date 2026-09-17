@@ -185,11 +185,11 @@ const GALLERY = {
     IMG+"/2025/09/brandon-hall-hotel-spa-warwickshire-brandon-warwickshire-pic-5.jpeg"
   ],
   weddings: [
-    IMG+"/2025/10/d5bbd9f93d2a64416f70d2749fa4d333.jpg",
-    IMG+"/2025/10/cfe352cb08f87468ed316d803dc8c01f.jpg",
-    IMG+"/2025/10/5c5ab5645d3775aa1599055058995442.jpg",
-    IMG+"/2025/10/90ef2b092a6f8ef4d5fc2eae8c650bf7.jpg",
-    IMG+"/2025/10/7c97647c255b50400681756be21e32f8.jpg"
+    "assets/weddings/wedding-04.jpg",
+    "assets/weddings/wedding-09.jpg",
+    "assets/weddings/wedding-13.jpg",
+    "assets/weddings/wedding-08.jpg",
+    "assets/weddings/wedding-06.jpg"
   ]
 };
 /* Per-room hero: default to a meetings image; edit to assign specific shots */
@@ -503,4 +503,243 @@ const MNE_ROOMS = {
   "parke": { readyToSell:null, currentAV:"To confirm", comments:"AV to be audited.", items:[] },
   "woodlands": { readyToSell:null, currentAV:"To confirm",
     comments:"28 theatre / up to 220 conference. AV to be audited.", items:[] }
+};
+
+/* ============================================================
+   EVENT FUNCTIONS & TEMPLATES (Guestline-style)
+   A quote line can be a "function" — a sub-part of the event
+   (meeting, lunch, refreshment break, dinner, reception).
+   Templates auto-populate a set of functions.
+   ============================================================ */
+const FUNCTION_TYPES = [
+  { id:"meeting",    label:"Meeting / Session", icon:"📊" },
+  { id:"refresh",    label:"Refreshment Break", icon:"☕" },
+  { id:"lunch",      label:"Lunch",             icon:"🍽️" },
+  { id:"dinner",     label:"Dinner",            icon:"🍷" },
+  { id:"reception",  label:"Drinks Reception",  icon:"🥂" },
+  { id:"ceremony",   label:"Ceremony",          icon:"💍" },
+  { id:"breakfast",  label:"Breakfast",         icon:"🥐" },
+  { id:"other",      label:"Other",             icon:"•" }
+];
+
+/* Event templates — auto-populate quote lines/functions.
+   Each function: type, label, time, layout, hire, pkg, addons[] */
+const EVENT_TEMPLATES = {
+  "ddr-conference": { label:"Day Conference (DDR)", event:"meeting",
+    functions:[
+      { type:"meeting", label:"Main conference", time:"09:00", layout:"theatre", hire:"full", pkg:"ddr" },
+      { type:"refresh", label:"Morning refreshments", time:"11:00", layout:"reception", hire:"none", pkg:"" },
+      { type:"lunch", label:"Lunch", time:"13:00", layout:"cabaret", hire:"none", pkg:"" },
+      { type:"refresh", label:"Afternoon refreshments", time:"15:00", layout:"reception", hire:"none", pkg:"" }
+    ]},
+  "conference-syndicate": { label:"Conference with Syndicate", event:"meeting",
+    functions:[
+      { type:"meeting", label:"Main plenary", time:"09:00", layout:"theatre", hire:"full", pkg:"ddr" },
+      { type:"meeting", label:"Syndicate room 1", time:"10:30", layout:"boardroom", hire:"full", pkg:"" },
+      { type:"meeting", label:"Syndicate room 2", time:"10:30", layout:"boardroom", hire:"full", pkg:"" },
+      { type:"lunch", label:"Lunch", time:"13:00", layout:"cabaret", hire:"none", pkg:"" }
+    ]},
+  "wedding-full": { label:"Wedding — Full Day", event:"wedding",
+    functions:[
+      { type:"ceremony", label:"Ceremony", time:"13:00", layout:"theatre", hire:"half", pkg:"" },
+      { type:"reception", label:"Drinks reception", time:"14:00", layout:"reception", hire:"none", pkg:"" },
+      { type:"dinner", label:"Wedding breakfast", time:"15:30", layout:"cabaret", hire:"none", pkg:"wedding-classic" },
+      { type:"reception", label:"Evening reception", time:"19:30", layout:"reception", hire:"none", pkg:"" }
+    ]},
+  "party-night": { label:"Private Party Night", event:"celebration",
+    functions:[
+      { type:"reception", label:"Arrival drinks", time:"19:00", layout:"reception", hire:"half", pkg:"" },
+      { type:"dinner", label:"Dinner", time:"19:30", layout:"cabaret", hire:"none", pkg:"celebrate-classic" },
+      { type:"reception", label:"Evening / DJ", time:"21:30", layout:"reception", hire:"none", pkg:"" }
+    ]},
+  "24hr": { label:"24hr Residential", event:"meeting",
+    functions:[
+      { type:"meeting", label:"Day 1 meeting", time:"09:00", layout:"boardroom", hire:"full", pkg:"24hr" },
+      { type:"lunch", label:"Day 1 lunch", time:"13:00", layout:"cabaret", hire:"none", pkg:"" },
+      { type:"dinner", label:"Dinner", time:"19:00", layout:"cabaret", hire:"none", pkg:"" },
+      { type:"breakfast", label:"Breakfast", time:"08:00", layout:"cabaret", hire:"none", pkg:"" },
+      { type:"meeting", label:"Day 2 meeting", time:"09:00", layout:"boardroom", hire:"full", pkg:"" }
+    ]}
+};
+
+/* ============================================================
+   TRANSCRIPT-INSPIRED SALES ADDITIONS
+   ============================================================ */
+
+/* Lost reasons for cancelled/lost enquiries (Guestline conversion tracking) */
+const LOST_REASONS = ["Price / budget","Date unavailable","Went to competitor","No response",
+  "Capacity / space","Changed plans","Duplicate enquiry","Other"];
+
+/* Checklist templates per event type — auto-generate task reminders with
+   offsets relative to the event date (days before, negative = after). */
+const CHECKLIST_TEMPLATES = {
+  wedding: [
+    { task:"Initial follow-up call", offset:-2, fromBooking:true },
+    { task:"Send proposal / brochure", offset:-5, fromBooking:true },
+    { task:"Provisional hold / viewing offered", offset:-10, fromBooking:true },
+    { task:"Deposit due", offset:60 },
+    { task:"Menu tasting", offset:90 },
+    { task:"Final numbers & rooming list", offset:14 },
+    { task:"Dietary requirements", offset:14 },
+    { task:"Final balance due", offset:7 },
+    { task:"12-month anniversary card", offset:-365 }
+  ],
+  meeting: [
+    { task:"Initial follow-up", offset:-1, fromBooking:true },
+    { task:"Send proposal", offset:-3, fromBooking:true },
+    { task:"Confirm AV & layout", offset:14 },
+    { task:"Final delegate numbers", offset:5 },
+    { task:"Rooming list (if residential)", offset:7 },
+    { task:"Dietary requirements", offset:5 },
+    { task:"Final balance / PO", offset:3 }
+  ],
+  celebration: [
+    { task:"Initial follow-up", offset:-2, fromBooking:true },
+    { task:"Send proposal", offset:-4, fromBooking:true },
+    { task:"Deposit due", offset:30 },
+    { task:"Final numbers", offset:10 },
+    { task:"Dietary requirements", offset:10 },
+    { task:"Final balance due", offset:7 }
+  ],
+  default: [
+    { task:"Initial follow-up", offset:-2, fromBooking:true },
+    { task:"Send proposal", offset:-4, fromBooking:true },
+    { task:"Final numbers", offset:7 },
+    { task:"Final balance due", offset:3 }
+  ]
+};
+function checklistFor(eventId){
+  if(eventId==="wedding") return CHECKLIST_TEMPLATES.wedding;
+  if(eventId==="meeting") return CHECKLIST_TEMPLATES.meeting;
+  if(["celebration","birthday","baby-shower","christmas","funeral"].includes(eventId)) return CHECKLIST_TEMPLATES.celebration;
+  return CHECKLIST_TEMPLATES.default;
+}
+
+/* Menu items selectable per function (for kitchen sheet) */
+const MENU_ITEMS = {
+  Starters: ["Soup of the day","Chicken liver parfait","Smoked salmon","Beetroot & goat's cheese salad",
+    "Prawn cocktail","Melon & Parma ham","Wild mushroom bruschetta"],
+  Mains: ["Roast beef & Yorkshire","Chicken supreme","Pan-fried salmon","Slow-braised lamb",
+    "Butternut squash risotto (v)","Wild mushroom Wellington (v)","Sea bass fillet"],
+  Desserts: ["Sticky toffee pudding","Lemon tart","Chocolate brownie","Cheesecake","Fruit crumble","Cheese board"],
+  Buffet: ["Sandwich selection","Hot fork buffet","Cold fork buffet","BBQ selection","Finger buffet","Grazing table"],
+  Canapes: ["Mini fish & chips","Smoked salmon blini","Bruschetta","Chicken skewers","Vegetable spring rolls"],
+  Refreshments: ["Tea & coffee","Tea, coffee & biscuits","Tea, coffee & pastries","Bacon rolls","Fruit platter"]
+};
+
+/* ============================================================
+   MARKETING CONTENT LIBRARY
+   8 sections. Baked-in assets from OneDrive; uploads add to
+   Firebase Storage (see firebase-store.js MktStore).
+   ============================================================ */
+const MKT_SECTIONS = [
+  { id:"logos",       label:"Logos",            icon:"🎨", desc:"Brand marks in every format & colour" },
+  { id:"guidelines",  label:"Brand Guidelines", icon:"📘", desc:"How to use the brand" },
+  { id:"posters",     label:"Posters & Flyers", icon:"🖼️", desc:"Print & display artwork" },
+  { id:"ratecards",   label:"Rate Cards",       icon:"💷", desc:"Agent & trade rate sheets" },
+  { id:"photography", label:"Photography",      icon:"📷", desc:"Hotel & event photography" },
+  { id:"videos",      label:"Videos",           icon:"🎬", desc:"Promo & venue films" },
+  { id:"templates",   label:"Templates",        icon:"📄", desc:"Editable templates & docs" },
+  { id:"social",      label:"Social",           icon:"📱", desc:"Social media assets & copy" }
+];
+
+/* Baked-in assets. type: image | pdf | svg | video | link.
+   thumb optional (falls back to file for images). */
+const MKT_ASSETS = {
+  logos: [
+    { name:"Primary Logo", type:"image", file:"assets/marketing/logos/logo-primary.png" },
+    { name:"Blue Logo", type:"image", file:"assets/marketing/logos/logo-blue.png" },
+    { name:"Blue — Transparent", type:"image", file:"assets/marketing/logos/logo-blue-transparent.png", dark:true },
+    { name:"Gold — Transparent", type:"image", file:"assets/marketing/logos/logo-gold-transparent.png", dark:true },
+    { name:"White — Transparent", type:"image", file:"assets/marketing/logos/logo-white-transparent.png", dark:true },
+    { name:"Vector Logo (SVG)", type:"svg", file:"assets/marketing/logos/logo-vector.svg" },
+    { name:"Vector Blue (SVG)", type:"svg", file:"assets/marketing/logos/logo-vector-blue.svg" },
+    { name:"Vector White (SVG)", type:"svg", file:"assets/marketing/logos/logo-vector-white.svg", dark:true }
+  ],
+  guidelines: [
+    { name:"Brand Guidelines", type:"pdf", file:"assets/marketing/guidelines/brand-guidelines.pdf",
+      thumb:"assets/marketing/thumbs/brand-guidelines.png" }
+  ],
+  posters: [
+    { name:"Spa Poster — Drinks", type:"image", file:"assets/marketing/posters/spa-poster-drinks.png" },
+    { name:"Match Day Accommodation", type:"pdf", file:"assets/marketing/posters/match-day-accommodation.pdf",
+      thumb:"assets/marketing/thumbs/match-day-accommodation.png" },
+    { name:"TripAdvisor Poster", type:"pdf", file:"assets/marketing/posters/tripadvisor-poster.pdf",
+      thumb:"assets/marketing/thumbs/tripadvisor-poster.png" },
+    { name:"Business Cards", type:"pdf", file:"assets/marketing/posters/business-cards.pdf",
+      thumb:"assets/marketing/thumbs/business-cards.png" }
+  ],
+  ratecards: [
+    { name:"50% Agent/Booker Rates", type:"pdf", file:"assets/marketing/ratecards/agent-rates-50.pdf",
+      thumb:"assets/marketing/thumbs/agent-rates-50.png" }
+  ],
+  photography: [
+    { name:"Wedding — Ceremony", type:"image", file:"assets/weddings/wedding-06.jpg" },
+    { name:"Wedding — Styling", type:"image", file:"assets/weddings/wedding-08.jpg" },
+    { name:"Wedding — Woodlands Suite", type:"image", file:"assets/weddings/wedding-21.jpg" },
+    { name:"Wedding — Gardens", type:"image", file:"assets/weddings/wedding-14.jpg" },
+    { name:"Wedding — Table Settings", type:"image", file:"assets/weddings/wedding-07.jpg" },
+    { name:"Wedding — Bar & Lounge", type:"image", file:"assets/weddings/wedding-22.jpg" }
+  ],
+  videos: [],
+  templates: [
+    { name:"Wedding Presentation (glossy slideshow)", type:"link", file:"assets/marketing/wedding-presentation.html",
+      thumb:"assets/marketing/thumbs/wedding-presentation.jpg" }
+  ],
+  social: []
+};
+
+/* ============================================================
+   DINING & BARS — restaurant/bar areas with seating plans
+   Restaurant plan from Brandon Hall Restaurant Floorplan PDF.
+   Tables: n=number, seats, shape (square/long/round), x/y grid pos.
+   ============================================================ */
+const DINING_AREAS = [
+  {
+    id:"restaurant", name:"The Restaurant", covers:94,
+    desc:"Main hotel restaurant serving breakfast, lunch and dinner. 23 tables seating 94 covers, with buffet stations and a service counter.",
+    features:["Breakfast buffet","À la carte dinner","Private dining options","Garden views"],
+    key:[["square","Square · 4 seats"],["long","Long · 6 seats (3 per side)"],["round","Round · 4 seats"]],
+    // grid layout approximating the PDF (col,row on a 6-wide grid)
+    tables:[
+      {n:"201",seats:4,shape:"square",c:0,r:0},{n:"202",seats:4,shape:"square",c:1,r:0},
+      {n:"203",seats:4,shape:"square",c:2,r:0},{n:"204",seats:4,shape:"square",c:0,r:1,buffet:true},
+      {n:"205",seats:4,shape:"square",c:1,r:1,buffet:true},{n:"206",seats:4,shape:"square",c:2,r:1},
+      {n:"207",seats:4,shape:"square",c:0,r:2},{n:"208",seats:4,shape:"square",c:1,r:2},
+      {n:"209",seats:4,shape:"square",c:2,r:2},{n:"210",seats:4,shape:"square",c:0,r:3},
+      {n:"211",seats:6,shape:"long",c:1,r:3},{n:"212",seats:4,shape:"square",c:3,r:0},
+      {n:"213",seats:6,shape:"long",c:4,r:0},{n:"214",seats:4,shape:"square",c:5,r:0},
+      {n:"215",seats:4,shape:"square",c:3,r:1},{n:"216",seats:4,shape:"square",c:4,r:1},
+      {n:"217",seats:6,shape:"long",c:5,r:1},{n:"218",seats:4,shape:"square",c:3,r:2},
+      {n:"219",seats:4,shape:"square",c:4,r:2},{n:"220",seats:4,shape:"square",c:5,r:2},
+      {n:"221",seats:4,shape:"square",c:3,r:3},{n:"222",seats:4,shape:"square",c:4,r:3},
+      {n:"223",seats:4,shape:"square",c:5,r:3}
+    ]
+  },
+  {
+    id:"bar", name:"The Bar & Lounge", covers:60,
+    desc:"Relaxed bar and lounge for drinks, light bites and pre-dinner receptions. Flexible lounge seating.",
+    features:["Full bar service","Cocktails","Lounge seating","Pre-dinner receptions"],
+    key:[], tables:[]
+  },
+  {
+    id:"terrace", name:"Garden Terrace", covers:40,
+    desc:"Outdoor terrace overlooking the landscaped gardens — ideal for summer drinks receptions and al fresco dining.",
+    features:["Al fresco dining","Drinks receptions","Garden views","Seasonal"],
+    key:[], tables:[]
+  }
+];
+
+/* ---- WEDDING PROPOSAL CONTENT (from Natalie's real responses) ---- */
+const WEDDING_CONTENT = {
+  intro:"Congratulations on your engagement! What an exciting time it is to plan your wedding celebration. We would love to help you plan and host your special day here at Brandon Hall Hotel & Spa.",
+  suite:"Our beautiful Brandon Suite caters for up to 50 guests in the day and a further 75 in the evening. Conveniently located in the main hotel with stunning views over the landscaped gardens — perfect for such a special occasion.",
+  reasons:[
+    { t:"Exclusive feel, without the exclusive price tag", d:"A stunning country-house setting that feels exclusively yours, at a price that works for you." },
+    { t:"Everyone under one roof", d:"Beautiful accommodation means friends and family can stay together — making the celebrations last well into the early hours. And the happy couple can relax in one of our bedroom suites." },
+    { t:"Bespoke packages", d:"Be as selective or as extravagant as you like — every wedding is tailored to you." },
+    { t:"Ceremony, day & evening", d:"Host your ceremony, wedding breakfast and evening party all in one place." }
+  ],
+  closing:"We'd love to welcome you to one of our Wedding Showcase open days. Shall I put your date on hold while you decide?",
+  contact:"Natalie Freeman · Event Executive · 024 7710 2555 ext 2003 · natalie.freeman@brandonhallhotelandspa.com"
 };

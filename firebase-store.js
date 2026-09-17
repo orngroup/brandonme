@@ -100,3 +100,37 @@ const FBStore = {
     await batch.commit();
   }
 };
+
+/* ---- MARKETING LIBRARY (Firebase Storage + Firestore index) ----
+   Uploaded files go to Storage; metadata to Firestore 'marketing'. */
+const MktStore = {
+  _cache: [], _listeners: [], live:false,
+  onChange(cb){ this._listeners.push(cb); },
+  _emit(){ this._listeners.forEach(cb=>cb(this._cache)); },
+  start(){
+    if(!FB.ready || !FB.user || !firebase.storage){ return false; }
+    if(this.live) return true; this.live=true;
+    FB.db.collection("marketing").orderBy("created","desc")
+      .onSnapshot(snap=>{ this._cache=snap.docs.map(d=>({id:d.id,...d.data()})); this._emit(); },
+        err=>console.warn("Marketing listener:",err.message));
+    return true;
+  },
+  items(section){ return this._cache.filter(m=>m.section===section); },
+  async upload(section, file, name){
+    if(!FB.ready || !FB.user) throw new Error("demo");
+    const path=`marketing/${section}/${Date.now()}_${file.name}`;
+    const ref=firebase.storage().ref().child(path);
+    const snap=await ref.put(file);
+    const url=await snap.ref.getDownloadURL();
+    const type = file.type.startsWith("image/")?"image":
+                 file.type==="application/pdf"?"pdf":
+                 file.type.startsWith("video/")?"video":"file";
+    await FB.db.collection("marketing").add({ section, name:name||file.name, url, path,
+      type, size:file.size, created:new Date().toISOString(), by:FB.user.name||"" });
+  },
+  async remove(id, path){
+    if(!FB.ready || !FB.user) return;
+    try{ if(path) await firebase.storage().ref().child(path).delete(); }catch{}
+    await FB.db.collection("marketing").doc(id).delete();
+  }
+};
