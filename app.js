@@ -69,8 +69,8 @@ function enterApp(user){
   $("#login").classList.add("hidden");
   $("#app").classList.remove("hidden");
   $("#tb-who").textContent=user.name;
+  const av=$("#sf-avatar"); if(av) av.textContent=(user.name||"").split(" ").map(w=>w[0]).join("").slice(0,2);
   const badge=$("#tb-mode"); if(badge) badge.textContent = FB.ready? "Live" : "Demo";
-  const bh=$("#brand-home"); if(bh) bh.onclick=()=>switchTab("home");
   boot();
 }
 $("#lg-pw").addEventListener("keydown",e=>{ if(e.key==="Enter")$("#lg-btn").click(); });
@@ -117,18 +117,35 @@ async function boot(){
   } else {
     Store.seed();
   }
-  document.querySelectorAll("#tabs button").forEach(b=>{
-    b.onclick=()=>{ CURRENT_TAB=b.dataset.tab;
-      document.querySelectorAll("#tabs button").forEach(x=>x.classList.toggle("active",x===b));
-      render(); };
-  });
+  buildSidebar();
   render();
+}
+function buildSidebar(){
+  const nav=$("#sf-nav"); if(!nav)return;
+  const mods=userModules(SESSION?._key||"ajay.kawa");
+  let html=`<button class="sf-nav-item sf-home" data-go="home"><span class="sf-ico">🏠</span> Home</button>`;
+  mods.forEach(m=>{
+    html+=`<div class="sf-nav-group">
+      <div class="sf-nav-head" style="--mc:${m.colour}"><span class="sf-mdot" style="background:${m.colour}"></span>${m.name}</div>`;
+    m.tabs.forEach(t=>{ const meta=TAB_META[t]; if(!meta)return;
+      html+=`<button class="sf-nav-item" data-go="${t}"><span class="sf-ico">${meta.icon}</span> ${meta.label}</button>`; });
+    html+=`</div>`;
+  });
+  nav.innerHTML=html;
+  nav.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>switchTab(b.dataset.go));
+  const s=$("#sf-settings"); if(s) s.onclick=()=>switchTab("admin");
+  const lg=$("#sf-logo-home"); if(lg) lg.onclick=()=>switchTab("home");
+}
+function syncSidebar(){
+  document.querySelectorAll("#sf-nav [data-go]").forEach(b=>
+    b.classList.toggle("active", b.dataset.go===CURRENT_TAB));
 }
 function render(){
   const v=$("#view"); v.innerHTML="";
   document.body.classList.toggle("home-active", CURRENT_TAB==="home");
+  syncSidebar();
   ({home:renderHome, rooms:renderRooms, dining:renderDining, pipeline:renderPipeline, corprates:renderCorpRates, packages:renderPackages, suppliers:renderSuppliers, quote:renderQuote,
-    profit:renderProfit, chat:renderChat, mne:renderMnE, marketing:renderMarketing, social:renderSocial, menu:renderMenuBuilder, brochure:renderBrochureBuilder, admin:renderAdmin }[CURRENT_TAB]||renderRooms)(v);
+    profit:renderProfit, chat:renderChat, mne:renderMnE, marketing:renderMarketing, social:renderSocial, menu:renderMenuBuilder, brochure:renderBrochureBuilder, tasks:renderTasks, insight:renderInsight, admin:renderAdmin }[CURRENT_TAB]||renderRooms)(v);
 }
 
 /* ============================================================ ROOMS */
@@ -265,8 +282,7 @@ function openRoom(r){
   $("#rm-quote").onclick=()=>{ closeModal(); prefill={room:r.id,event:evId,pax}; switchTab("quote"); };
   $("#rm-enq").onclick=()=>{ closeModal(); openEnquiryForm({room:r.id,event:evId}); };
 }
-function switchTab(t){ CURRENT_TAB=t;
-  document.querySelectorAll("#tabs button").forEach(x=>x.classList.toggle("active",x.dataset.tab===t)); render(); }
+function switchTab(t){ CURRENT_TAB=t; render(); }
 
 /* ============================================================ PACKAGES */
 function renderPackages(v){
@@ -2427,47 +2443,160 @@ function renderSocialPreview(){
 
 /* ============================================================ HOME / WELCOME */
 function renderHome(v){
-  const name=SESSION?.name?.split(" ")[0]||"there";
-  const hour=new Date().getHours();
-  const greet=hour<12?"Good morning":hour<18?"Good afternoon":"Good evening";
-  const hero=el("div","home-hero");
-  hero.innerHTML=`<div class="hh-inner">
-    <div class="hh-eyebrow">${greet}</div>
-    <h2 class="hh-title">Hello ${name} 👋</h2>
-    <p class="hh-sub">Welcome to the Brandon Hall Hotel &amp; Spa Management Portal.</p>
-    <p class="hh-meta">${new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</p>
-  </div>`;
+  const name=SESSION?.name||"there";
+  // ---- branded welcome hero band ----
+  const hero=el("div","sf-hero");
+  hero.innerHTML=`
+    <div class="sf-hero-left">
+      <div class="sf-hero-logo"><span class="sf-stay">Stay</span><span class="sf-flow">FLOW</span><span class="sf-tm">™</span></div>
+      <div class="sf-hero-tag">OPERATE · SELL · DELIVER · GROW</div>
+    </div>
+    <div class="sf-hero-mid">
+      <div class="sf-hero-welcome">Welcome</div>
+      <h2 class="sf-hero-hotel">Brandon Hall<br>Hotel &amp; Spa</h2>
+      <div class="sf-hero-rule"></div>
+      <p class="sf-hero-sub">Same exceptional hospitality.<br>Now with smarter operations.</p>
+    </div>
+    <div class="sf-hero-right">
+      <div class="sf-hero-title">One Platform.<br>A More Successful Hotel.</div>
+      <div class="sf-hero-rule sm"></div>
+      <p class="sf-hero-blurb">StayFLOW helps you streamline operations, empower your team and drive commercial growth.</p>
+    </div>`;
   v.appendChild(hero);
 
-  // quick stats (from pipeline)
-  const pipe=(typeof pipelineData==="function")?pipelineData():[];
-  if(pipe.length){
-    const open=pipe.filter(e=>["enquiry","provisional"].includes(e.status));
-    const openVal=open.reduce((s,e)=>s+(e.value||0),0);
-    const today=new Date().toISOString().slice(0,10);
-    const followUps=pipe.filter(e=>e.followUp && e.followUp<=today && ["enquiry","provisional"].includes(e.status)).length;
-    const qs=el("div","home-quickstats");
-    qs.innerHTML=`
-      <div class="hq"><span class="hq-v">${money(Math.round(openVal))}</span><span class="hq-k">Open pipeline</span></div>
-      <div class="hq"><span class="hq-v">${open.length}</span><span class="hq-k">Open opportunities</span></div>
-      <div class="hq ${followUps?'alert':''}"><span class="hq-v">${followUps}</span><span class="hq-k">Follow-ups due</span></div>`;
-    v.appendChild(qs);
-  }
+  // ---- coloured FLOW module cards ----
+  const mods=userModules(SESSION?._key||"ajay.kawa");
+  const cardRow=el("div","sf-modules");
+  cardRow.innerHTML=mods.map(m=>`
+    <button class="sf-modcard" data-go="${m.tabs[0]}" style="--mc:${m.colour};--mt:${m.tint}">
+      <span class="sf-modico" style="background:${m.colour}">${m.icon}</span>
+      <span class="sf-modname">${m.name.replace("FLOW","")}<b>FLOW</b></span>
+      <span class="sf-modcap">${m.caption}</span>
+    </button>`).join("");
+  v.appendChild(cardRow);
+  cardRow.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>switchTab(b.dataset.go));
 
-  // sections
-  const sections=userSections(SESSION?._key||"ajay.kawa");
-  sections.forEach(sec=>{
-    const block=el("div","home-section");
-    const tiles=sec.tabs.map(t=>{ const m=TAB_META[t]; if(!m)return"";
-      return `<button class="home-tile" data-go="${t}"><span class="ht-ico">${m.icon}</span><span class="ht-label">${m.label}</span></button>`;
-    }).join("");
-    block.innerHTML=`<div class="hs-head" style="--sc:${sec.colour}">
-        <span class="hs-ico">${sec.icon}</span>
-        <div><div class="hs-label">${sec.label}</div><div class="hs-desc">${sec.desc}</div></div></div>
-      <div class="home-tiles">${tiles}</div>`;
-    v.appendChild(block);
-  });
-  v.querySelectorAll(".home-tile").forEach(b=>b.onclick=()=>switchTab(b.dataset.go));
+  // ---- dashboard header ----
+  const dh=el("div","sf-dash-head");
+  dh.innerHTML=`<div><h2>Welcome, Brandon Hall Hotel and Spa</h2><p>Here's what's happening today.</p></div>`;
+  v.appendChild(dh);
+
+  // ---- stat cards (real where we have it) ----
+  const pipe=(typeof pipelineData==="function")?pipelineData():[];
+  const open=pipe.filter(e=>["enquiry","provisional"].includes(e.status));
+  const today=new Date().toISOString().slice(0,10);
+  const upcoming=pipe.filter(e=>e.date && /^\d{4}-\d{2}-\d{2}/.test(e.date) && e.date>=today && e.status!=="cancelled")
+    .sort((a,b)=>a.date.localeCompare(b.date));
+  const eventsToday=pipe.filter(e=>e.date===today && e.status!=="cancelled").length;
+  const openTasks=(typeof TaskStore!=="undefined")?TaskStore.all().filter(t=>!t.done).length:0;
+  const stats=el("div","sf-stats");
+  stats.innerHTML=`
+    <button class="sf-stat" data-go="pipeline"><span class="sf-stat-ic" style="background:#e6f3ee">📅</span>
+      <div><span class="sf-stat-v">${eventsToday||upcoming.length}</span><span class="sf-stat-k">${eventsToday?"Events today":"Upcoming events"}</span></div><span class="sf-stat-go">›</span></button>
+    <button class="sf-stat"><span class="sf-stat-ic" style="background:#e6eff8">🛏️</span>
+      <div><span class="sf-stat-v">92%<sup class="sf-est">est</sup></span><span class="sf-stat-k">Room occupancy</span></div><span class="sf-stat-go">›</span></button>
+    <button class="sf-stat" data-go="pipeline"><span class="sf-stat-ic" style="background:#f1e9f2">👥</span>
+      <div><span class="sf-stat-v">${open.length}</span><span class="sf-stat-k">Active leads</span></div><span class="sf-stat-go">›</span></button>
+    <button class="sf-stat" data-go="tasks"><span class="sf-stat-ic" style="background:#e8f3e8">✅</span>
+      <div><span class="sf-stat-v">${openTasks}</span><span class="sf-stat-k">Open tasks</span></div><span class="sf-stat-go">›</span></button>`;
+  v.appendChild(stats);
+  stats.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>switchTab(b.dataset.go));
+
+  // ---- two-column: priorities + upcoming / quote ----
+  const grid=el("div","sf-dash-grid");
+
+  // Today's priorities (from tasks + follow-ups)
+  const tasks=(typeof TaskStore!=="undefined")?TaskStore.all().filter(t=>!t.done).slice(0,5):[];
+  const prioRows = tasks.length? tasks.map(t=>`<div class="sf-prio"><span class="sf-prio-check">☐</span>
+      <div class="sf-prio-txt">${t.title}<span class="sf-prio-mod">${t.module||"TaskFLOW"}</span></div>
+      <span class="sf-prio-due">${t.due||""}</span></div>`).join("")
+    : open.slice(0,5).map(e=>`<div class="sf-prio"><span class="sf-prio-check">☐</span>
+      <div class="sf-prio-txt">Follow up: ${e.name}<span class="sf-prio-mod">SalesFLOW</span></div>
+      <span class="sf-prio-due">${e.followUp?fmtDMY(e.followUp):""}</span></div>`).join("");
+
+  const upRows = upcoming.slice(0,4).map(e=>{ const d=new Date(e.date);
+    const et=EVENT_TYPES.find(t=>t.id===e.event);
+    return `<div class="sf-up"><div class="sf-up-date"><b>${d.getDate()}</b><span>${d.toLocaleDateString("en-GB",{month:"short"}).toUpperCase()}</span></div>
+      <div class="sf-up-txt">${e.name}<span class="sf-up-sub">${et?et.label:(e.roomName||"Event")}</span></div></div>`;
+  }).join("") || `<div class="qs-sub" style="padding:10px 0">No upcoming events in the pipeline.</div>`;
+
+  grid.innerHTML=`
+    <div class="sf-panel">
+      <div class="sf-panel-head"><h3>Today's Priorities</h3><button class="sf-link" data-go="tasks">View all</button></div>
+      ${prioRows||`<div class="qs-sub" style="padding:10px 0">Nothing outstanding — nice work.</div>`}
+    </div>
+    <div class="sf-panel">
+      <div class="sf-panel-head"><h3>Upcoming Events</h3><button class="sf-link" data-go="pipeline">View all</button></div>
+      ${upRows}
+    </div>
+    <div class="sf-quote" style="background-image:linear-gradient(rgba(26,43,71,.45),rgba(16,29,51,.65)),url('assets/hotel/pool.png')">
+      <div class="sf-quote-txt">"Great hotels don't just happen. They flow."</div>
+      <div class="sf-quote-by"><span class="sf-stay">Stay</span><span class="sf-flow">FLOW</span><br><small>For every part of your hotel.</small></div>
+    </div>`;
+  v.appendChild(grid);
+  grid.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>switchTab(b.dataset.go));
+}
+function fmtDMY(d){ return /^\d{4}-\d{2}-\d{2}/.test(d)?new Date(d).toLocaleDateString("en-GB"):d; }
+
+/* ============================================================ TASKFLOW */
+const TaskStore={ key:"bh_tasks",
+  all(){ try{return JSON.parse(localStorage.getItem(this.key))||DEFAULT_TASKS}catch{return DEFAULT_TASKS} },
+  save(l){ localStorage.setItem(this.key,JSON.stringify(l)); },
+  add(t){ const l=this.all(); l.unshift(Object.assign({id:"T-"+Date.now().toString(36)},t)); this.save(l); },
+  toggle(id){ const l=this.all(); const t=l.find(x=>x.id===id); if(t){t.done=!t.done; this.save(l);} },
+  remove(id){ this.save(this.all().filter(x=>x.id!==id)); } };
+const DEFAULT_TASKS=[
+  { id:"T-1", title:"Finalise wedding rooming list", module:"EventsFLOW", due:"Due 10:00", done:false },
+  { id:"T-2", title:"Approve Q3 corporate proposal", module:"SalesFLOW", due:"Due 11:30", done:false },
+  { id:"T-3", title:"Check spa maintenance schedule", module:"AssetFLOW", due:"Due 14:00", done:false },
+  { id:"T-4", title:"Review marketing campaign assets", module:"MarketingFLOW", due:"Due 15:00", done:false },
+  { id:"T-5", title:"Team briefing", module:"TaskFLOW", due:"Due 16:00", done:false }
+];
+function renderTasks(v){
+  v.appendChild(head("Tasks","Team tasks and accountability across every module."));
+  const tb=el("div","enq-toolbar");
+  tb.innerHTML=`<button class="btn" id="task-new">+ New task</button><div class="spacer"></div>`;
+  v.appendChild(tb);
+  $("#task-new").onclick=()=>{ const title=prompt("Task:"); if(title){ TaskStore.add({title,module:"TaskFLOW",due:"",done:false}); render(); } };
+  const list=TaskStore.all();
+  const box=el("div","task-list");
+  box.innerHTML=list.map(t=>`<div class="task-row ${t.done?'done':''}">
+    <button class="task-check" data-id="${t.id}">${t.done?"✓":"☐"}</button>
+    <div class="task-txt">${t.title}<span class="task-mod">${t.module||""}</span></div>
+    <span class="task-due">${t.due||""}</span>
+    <button class="task-del" data-id="${t.id}">×</button></div>`).join("")||`<div class="empty"><div class="big">No tasks</div>Add one to get started.</div>`;
+  v.appendChild(box);
+  box.querySelectorAll(".task-check").forEach(b=>b.onclick=()=>{ TaskStore.toggle(b.dataset.id); render(); });
+  box.querySelectorAll(".task-del").forEach(b=>b.onclick=()=>{ TaskStore.remove(b.dataset.id); render(); });
+}
+
+/* ============================================================ INSIGHTFLOW */
+function renderInsight(v){
+  v.appendChild(head("Insights","At-a-glance analytics across your pipeline and business-on-books."));
+  // reuse pipeline data for a quick insight board
+  const pipe=(typeof pipelineData==="function")?pipelineData():[];
+  const open=pipe.filter(e=>["enquiry","provisional"].includes(e.status));
+  const conf=pipe.filter(e=>e.status==="confirmed");
+  const lost=pipe.filter(e=>e.status==="cancelled");
+  const openVal=open.reduce((s,e)=>s+(e.value||0),0);
+  const confVal=conf.reduce((s,e)=>s+(e.value||0),0);
+  const kpis=el("div","stat-cards");
+  kpis.innerHTML=`
+    <div class="stat-card accent"><div class="sc-v">${money(Math.round(openVal))}</div><div class="sc-k">Open pipeline</div></div>
+    <div class="stat-card"><div class="sc-v">${open.length}</div><div class="sc-k">Open opportunities</div></div>
+    <div class="stat-card"><div class="sc-v">${money(Math.round(confVal))}</div><div class="sc-k">Confirmed value</div></div>
+    <div class="stat-card"><div class="sc-v">${conf.length}</div><div class="sc-k">Confirmed</div></div>
+    <div class="stat-card"><div class="sc-v">${pipe.length?Math.round(conf.length/pipe.length*100):0}%</div><div class="sc-k">Conversion</div></div>
+    <div class="stat-card"><div class="sc-v">${lost.length}</div><div class="sc-k">Cancelled</div></div>`;
+  v.appendChild(kpis);
+  if(typeof clickableChart==="function" && open.length){
+    const row=el("div","chart-row");
+    row.appendChild(clickableChart("Pipeline value by owner","owner", pieChartData(pipe.filter(e=>["enquiry","provisional","confirmed"].includes(e.status)),e=>e.owner||"Unassigned")));
+    row.appendChild(clickableChart("Pipeline value by room","room", barChartData(pipe.filter(e=>["enquiry","provisional","confirmed"].includes(e.status)),e=>e.roomName||ROOMS.find(r=>r.id===e.room)?.name||"—")));
+    v.appendChild(row);
+  }
+  v.appendChild(el("p","qs-sub",`<span style="font-size:12px">Open the Sales Pipeline for the full filterable view.</span>`));
+  const b=el("button","btn"); b.textContent="Go to Sales Pipeline"; b.onclick=()=>switchTab("pipeline"); v.appendChild(b);
 }
 
 /* ============================================================ HELPERS */

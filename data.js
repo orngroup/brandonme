@@ -674,6 +674,17 @@ const MKT_ASSETS = {
       thumb:"assets/marketing/thumbs/agent-rates-50.png" }
   ],
   photography: [
+    { name:"Hotel — Exterior at Dusk", type:"image", file:"assets/hotel/exterior-dusk.png" },
+    { name:"Hotel — Front & Lawn", type:"image", file:"assets/hotel/exterior-lawn.png" },
+    { name:"Hotel — Entrance", type:"image", file:"assets/hotel/exterior-front.png" },
+    { name:"Bedroom — Feature Wall", type:"image", file:"assets/hotel/bedroom-teal.png" },
+    { name:"Bedroom — Classic", type:"image", file:"assets/hotel/bedroom-yellow.png" },
+    { name:"Suite — Bay Window", type:"image", file:"assets/hotel/suite-bay.png" },
+    { name:"Leisure — Swimming Pool", type:"image", file:"assets/hotel/pool.png" },
+    { name:"Bar & Lounge", type:"image", file:"assets/hotel/bar-lounge.png" },
+    { name:"Restaurant", type:"image", file:"assets/hotel/restaurant.png" },
+    { name:"Garden Terrace", type:"image", file:"assets/hotel/terrace.png" },
+    { name:"Reception", type:"image", file:"assets/hotel/reception.png" },
     { name:"Wedding — Ceremony", type:"image", file:"assets/weddings/wedding-06.jpg" },
     { name:"Wedding — Styling", type:"image", file:"assets/weddings/wedding-08.jpg" },
     { name:"Wedding — Woodlands Suite", type:"image", file:"assets/weddings/wedding-21.jpg" },
@@ -764,16 +775,20 @@ function isOTARate(rateCode){
    Starter templates from real Brandon Hall rates.
    ============================================================ */
 const BROCHURE_IMAGES = [
-  { id:"meeting-1", label:"Meeting room 1", file:GALLERY?.meetings?.[0]||"" },
-  { id:"meeting-2", label:"Meeting room 2", file:GALLERY?.meetings?.[1]||"" },
-  { id:"meeting-3", label:"Meeting room 3", file:GALLERY?.meetings?.[2]||"" },
-  { id:"exterior",  label:"Hotel exterior", file:"assets/weddings/wedding-25.jpg" },
-  { id:"gardens",   label:"Gardens",        file:"assets/weddings/wedding-14.jpg" },
+  { id:"exterior-dusk", label:"Exterior at dusk", file:"assets/hotel/exterior-dusk.png" },
+  { id:"exterior-lawn", label:"Front & lawn",     file:"assets/hotel/exterior-lawn.png" },
+  { id:"exterior",      label:"Entrance",         file:"assets/hotel/exterior-front.png" },
+  { id:"pool",          label:"Swimming pool",    file:"assets/hotel/pool.png" },
+  { id:"bar",           label:"Bar & lounge",     file:"assets/hotel/bar-lounge.png" },
+  { id:"restaurant",    label:"Restaurant",       file:"assets/hotel/restaurant.png" },
+  { id:"terrace",       label:"Garden terrace",   file:"assets/hotel/terrace.png" },
+  { id:"bedroom",       label:"Bedroom",          file:"assets/hotel/bedroom-teal.png" },
+  { id:"suite",         label:"Suite",            file:"assets/hotel/suite-bay.png" },
+  { id:"reception",     label:"Reception",        file:"assets/hotel/reception.png" },
+  { id:"gardens",       label:"Gardens",          file:"assets/weddings/wedding-14.jpg" },
   { id:"wedding-suite", label:"Woodlands (dressed)", file:"assets/weddings/wedding-21.jpg" },
-  { id:"ceremony",  label:"Ceremony",       file:"assets/weddings/wedding-06.jpg" },
-  { id:"bar",       label:"Bar & lounge",   file:"assets/weddings/wedding-22.jpg" },
-  { id:"spa",       label:"Spa",            file:"assets/weddings/wedding-24.jpg" },
-  { id:"dining",    label:"Table settings", file:"assets/weddings/wedding-07.jpg" }
+  { id:"ceremony",      label:"Ceremony",         file:"assets/weddings/wedding-06.jpg" },
+  { id:"dining",        label:"Table settings",   file:"assets/weddings/wedding-07.jpg" }
 ];
 
 const BROCHURE_TEMPLATES = {
@@ -828,31 +843,22 @@ const BROCHURE_TEMPLATES = {
 };
 
 /* ============================================================
-   PORTAL HOME — grouped sections + role-based access
+   STAYFLOW — modules (sidebar + welcome cards) + role access
    ============================================================ */
-const PORTAL_SECTIONS = [
-  { id:"branding", label:"Branding & Marketing", icon:"🎨", colour:"#BB9979",
-    desc:"Brand assets, content library and social media",
-    tabs:["marketing","social"] },
-  { id:"commercial", label:"Commercial", icon:"📈", colour:"#1a2b47",
-    desc:"Pipeline, corporate rates and profitability",
-    tabs:["pipeline","corprates","profit"] },
-  { id:"collateral", label:"Collateral", icon:"📄", colour:"#4a7c59",
-    desc:"Quotes, brochures and menus",
-    tabs:["quote","brochure","menu"] },
-  { id:"venue", label:"Venue & Spaces", icon:"🏛️", colour:"#7a9bc4",
-    desc:"Rooms, dining, packages and suppliers",
-    tabs:["rooms","dining","packages","suppliers"] },
-  { id:"weddings-events", label:"Weddings & Events", icon:"💍", colour:"#c9814f",
-    desc:"Events chat and enquiry capture",
-    tabs:["chat"] },
-  { id:"operational", label:"Operational Tools", icon:"🔧", colour:"#9d7d5f",
-    desc:"M&E upgrade tracker and admin",
-    tabs:["mne","admin"] }
+const FLOW_MODULES = [
+  { id:"events",    name:"EventsFLOW",    caption:"Plan. Organise. Deliver.",       icon:"📅", colour:"#4a9d7f", tint:"#e6f3ee", tabs:["chat","dining"] },
+  { id:"room",      name:"RoomFLOW",      caption:"Keep operations in flow.",       icon:"🛏️", colour:"#4a86c7", tint:"#e6eff8", tabs:["rooms","packages"] },
+  { id:"sales",     name:"SalesFLOW",     caption:"Leads. Proposals. Growth.",      icon:"📊", colour:"#8b5c8f", tint:"#f1e9f2", tabs:["pipeline","corprates","profit"] },
+  { id:"marketing", name:"MarketingFLOW", caption:"Create. Campaign. Convert.",     icon:"📣", colour:"#c85c6b", tint:"#f8e9eb", tabs:["marketing","social"] },
+  { id:"task",      name:"TaskFLOW",      caption:"Tasks. Teams. Accountability.",  icon:"✅", colour:"#d4a24a", tint:"#faf1e0", tabs:["tasks"] },
+  { id:"asset",     name:"AssetFLOW",     caption:"Maintain. Track. Extend.",       icon:"🔧", colour:"#3fa8a0", tint:"#e3f3f1", tabs:["mne","suppliers"] },
+  { id:"content",   name:"ContentFLOW",   caption:"Brochures. Menus. Collateral.",  icon:"📄", colour:"#5a8fc7", tint:"#e8f0f8", tabs:["quote","brochure","menu"] },
+  { id:"insight",   name:"InsightFLOW",   caption:"See more. Do more.",             icon:"📈", colour:"#5fa563", tint:"#e8f3e8", tabs:["insight","admin"] }
 ];
 
-/* Tab metadata for tiles (label + one-line) */
+/* Tab metadata (label + icon) for sidebar links and cards */
 const TAB_META = {
+  home:{label:"Home",icon:"🏠"},
   rooms:{label:"Rooms",icon:"🚪"}, dining:{label:"Dining & Bars",icon:"🍽️"},
   pipeline:{label:"Sales Pipeline",icon:"📊"}, corprates:{label:"Corporate Rates",icon:"💷"},
   packages:{label:"Packages",icon:"📦"}, suppliers:{label:"Suppliers",icon:"🤝"},
@@ -860,20 +866,19 @@ const TAB_META = {
   chat:{label:"Events Chat",icon:"💬"}, mne:{label:"M&E Upgrade",icon:"🖥️"},
   marketing:{label:"Marketing Library",icon:"🖼️"}, menu:{label:"Menu Builder",icon:"📝"},
   brochure:{label:"Brochure Builder",icon:"📕"}, social:{label:"Social Studio",icon:"📱"},
+  tasks:{label:"Tasks",icon:"✅"}, insight:{label:"Insights",icon:"📈"},
   admin:{label:"Admin",icon:"⚙️"}
 };
 
-/* Role-based access. Everyone sees "all" by default; restrict per user here.
-   Set a user's `sections` to an array of section ids to limit them. */
+/* Which module a tab belongs to (for sidebar grouping / highlighting) */
+function moduleForTab(tab){ return FLOW_MODULES.find(m=>m.tabs.includes(tab)); }
+
+/* Role-based access. "all" or an array of module ids. */
 const ROLE_ACCESS = {
-  "ajay.kawa":         "all",
-  "raj.kumar":         "all",
-  "alia.taub":         "all",
-  "nicola.cartwright": "all"
-  // e.g. limit someone: "front.office": ["venue","operational"]
+  "ajay.kawa":"all", "raj.kumar":"all", "alia.taub":"all", "nicola.cartwright":"all"
 };
-function userSections(userKey){
+function userModules(userKey){
   const acc=ROLE_ACCESS[userKey]||"all";
-  if(acc==="all") return PORTAL_SECTIONS;
-  return PORTAL_SECTIONS.filter(s=>acc.includes(s.id));
+  if(acc==="all") return FLOW_MODULES;
+  return FLOW_MODULES.filter(m=>acc.includes(m.id));
 }
