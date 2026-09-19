@@ -4,7 +4,18 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#BB9979">
-<title>Brandon Hall Sales Portal</title>
+<title>Brandon Hall Hotel and Spa</title>
+<meta name="description" content="Complete your pre check-in for Brandon Hall Hotel and Spa. We look forward to welcoming you.">
+<!-- Link preview (WhatsApp / social / email) -->
+<meta property="og:title" content="Brandon Hall Hotel and Spa">
+<meta property="og:description" content="We look forward to welcoming you. Please complete your pre check-in before you arrive.">
+<meta property="og:image" content="https://orngroup.github.io/brandonme/assets/hotel/exterior-dusk.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Brandon Hall Hotel and Spa">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Brandon Hall Hotel and Spa">
+<meta name="twitter:description" content="We look forward to welcoming you. Please complete your pre check-in before you arrive.">
+<meta name="twitter:image" content="https://orngroup.github.io/brandonme/assets/hotel/exterior-dusk.png">
 <link rel="manifest" href="manifest.json">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -93,6 +104,39 @@ a{color:var(--gold-dk)}
 .sf-uwrap{display:flex;flex-direction:column;line-height:1.15;font-family:var(--brand-sans)}
 .sf-uwrap b{font-size:13.5px;color:var(--brand-navy)}
 .sf-urole{font-size:11px;color:#8a97a6}
+
+/* ---------- PRE CHECK-IN (public) ---------- */
+body.pc-public{background:#0f1f30}
+.pc-splash,.pc-thanks{min-height:100dvh;display:grid;place-items:center;text-align:center;padding:30px;
+  background:linear-gradient(rgba(15,31,48,.72),rgba(15,31,48,.86)),url('assets/hotel/exterior-dusk.png') center/cover fixed;color:#fff}
+.pc-splash-inner,.pc-thanks-inner{max-width:520px;animation:pcfade .7s ease}
+@keyframes pcfade{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.pc-splash-logo{width:120px;margin-bottom:22px}
+.pc-splash-eyebrow{font-family:'Lato',sans-serif;font-size:13px;letter-spacing:5px;color:#c9a978;font-weight:700}
+.pc-splash-title{font-family:var(--serif);font-size:46px;font-weight:600;line-height:1.05;margin:10px 0 16px}
+.pc-splash-sub{font-family:'Lato',sans-serif;font-size:16px;line-height:1.6;color:#dbe3ec;max-width:420px;margin:0 auto}
+.pc-begin{margin-top:30px;background:#c9a978;color:#1a2b3a;border:none;padding:15px 34px;border-radius:32px;
+  font:700 16px/1 'Lato',sans-serif;cursor:pointer;transition:.18s;box-shadow:0 8px 24px rgba(0,0,0,.3)}
+.pc-begin:hover{background:#d8bb8e;transform:translateY(-2px)}
+.pc-formwrap{min-height:100dvh;padding:36px 20px;background:linear-gradient(rgba(15,31,48,.85),rgba(15,31,48,.92)),url('assets/hotel/exterior-dusk.png') center/cover fixed}
+.pc-card{max-width:640px;margin:0 auto;background:#22374d;border-radius:18px;
+  padding:34px 34px 30px;box-shadow:0 20px 60px rgba(0,0,0,.4);border:1px solid rgba(201,169,120,.25)}
+.pc-card-logo{width:80px;display:block;margin:0 auto 14px}
+.pc-card-title{font-family:var(--serif);font-size:30px;font-weight:600;color:#fff;text-align:center}
+.pc-card-sub{font-family:'Lato',sans-serif;font-size:14px;color:#b8c6d6;text-align:center;margin-bottom:22px}
+.pc-card .form-grid label{color:#c9a978;font-weight:600;font-size:12.5px}
+.pc-card .form-grid input,.pc-card .form-grid select,.pc-card .form-grid textarea{
+  background:rgba(255,255,255,.06);border:1px solid rgba(201,169,120,.3);color:#fff;border-radius:9px}
+.pc-card .form-grid input::placeholder,.pc-card .form-grid textarea::placeholder{color:#8ea0b3}
+.pc-card .form-grid input:focus,.pc-card .form-grid select:focus,.pc-card .form-grid textarea:focus{
+  outline:none;border-color:#c9a978;background:rgba(255,255,255,.1)}
+.pc-card .form-grid select option{background:#22374d;color:#fff}
+.pc-submit{width:100%;background:#c9a978;color:#1a2b3a;border:none;padding:14px;border-radius:10px;
+  font:700 15px/1 'Lato',sans-serif;cursor:pointer;transition:.15s}
+.pc-submit:hover{background:#d8bb8e}
+.pc-msg{font-size:13px;margin-top:10px;text-align:center;color:#dbe3ec}
+.pc-foot{text-align:center;color:#8ea0b3;font-size:12px;margin:20px 0 10px;font-family:'Lato',sans-serif}
+@media(max-width:560px){.pc-splash-title{font-size:36px}}
 
 /* ---------- STAYFLOW HOME / DASHBOARD ---------- */
 #view{padding:24px 26px 50px;max-width:1240px;width:100%;font-family:var(--brand-sans)}

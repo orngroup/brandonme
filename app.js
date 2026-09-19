@@ -2671,19 +2671,34 @@ function openPrecheckinForm(){
   const app=$("#app"); if(app) app.classList.remove("hidden");
   document.querySelector(".sf-sidebar")&&(document.querySelector(".sf-sidebar").style.display="none");
   document.querySelector(".sf-header")&&(document.querySelector(".sf-header").style.display="none");
-  document.querySelector(".sf-main")&&(document.querySelector(".sf-main").style.marginLeft="0");
-  const v=$("#view"); if(!v)return; v.innerHTML=""; v.style.maxWidth="620px"; v.style.margin="0 auto";
-  const wrap=el("div");
+  const main=document.querySelector(".sf-main"); if(main){ main.style.marginLeft="0"; main.style.padding="0"; }
+  document.body.classList.add("pc-public");
+  const v=$("#view"); if(!v)return; v.innerHTML=""; v.style.maxWidth="none"; v.style.margin="0"; v.style.padding="0";
+
+  // ---- SPLASH ----
+  const splash=el("div","pc-splash");
+  splash.innerHTML=`<div class="pc-splash-inner">
+      <img src="assets/marketing/logos/logo-gold-transparent.png" class="pc-splash-logo" onerror="this.src='assets/bh-logo.svg'">
+      <div class="pc-splash-eyebrow">WELCOME TO</div>
+      <h1 class="pc-splash-title">Brandon Hall<br>Hotel and Spa</h1>
+      <p class="pc-splash-sub">We look forward to welcoming you. Please take a moment to complete your pre check-in so we can prepare for your stay.</p>
+      <button class="pc-begin" id="pc-begin">Begin pre check-in →</button>
+    </div>`;
+  v.appendChild(splash);
+  $("#pc-begin").onclick=()=>{ splash.remove(); showPrecheckinFields(v); };
+}
+function showPrecheckinFields(v){
+  const wrap=el("div","pc-formwrap");
   wrap.innerHTML=`
-    <div style="text-align:center;padding:26px 0 10px"><img src="assets/bh-logo.svg" style="width:90px" alt="Brandon Hall"></div>
-    <div class="quote-panel">
-      <h3 style="font-family:var(--serif);font-size:24px">Pre Check-in</h3>
-      <p class="qs-sub" style="margin-bottom:14px">Welcome to Brandon Hall Hotel and Spa. Please complete the details below so we can prepare for your stay.</p>
+    <div class="pc-card">
+      <img src="assets/marketing/logos/logo-gold-transparent.png" class="pc-card-logo" onerror="this.src='assets/bh-logo.svg'">
+      <h3 class="pc-card-title">Pre Check-in</h3>
+      <p class="pc-card-sub">Please complete the details below.</p>
       <div class="form-grid" id="pc-fields"></div>
-      <div id="pc-msg" class="qs-sub" style="margin-top:10px"></div>
-      <div style="margin-top:16px"><button class="btn" id="pc-submit">Submit pre check-in</button></div>
+      <div id="pc-msg" class="pc-msg"></div>
+      <div style="margin-top:18px"><button class="pc-submit" id="pc-submit">Submit pre check-in</button></div>
     </div>
-    <p class="qs-sub" style="text-align:center;margin:16px 0 40px">Brandon Hall Hotel and Spa · Main Street, Brandon, Coventry CV8 3FW</p>`;
+    <p class="pc-foot">Brandon Hall Hotel and Spa · Main Street, Brandon, Coventry CV8 3FW · 024 7710 2555</p>`;
   v.appendChild(wrap);
   const box=$("#pc-fields");
   box.innerHTML=PRECHECKIN_FIELDS.map(f=>{
@@ -2694,7 +2709,6 @@ function openPrecheckinForm(){
     else input=`<input id="pc-${f.key}" type="${f.type}" placeholder="${f.ph||""}">`;
     return `<div class="${full}" data-field="${f.key}"><label>${f.label}${f.req?' *':''}</label>${input}</div>`;
   }).join("");
-  // conditional dinner fields
   const toggleDinner=()=>{ const show=$("#pc-dinner")?.value==="Yes";
     ["dinnerTime","dinnerCovers"].forEach(k=>{ const el2=box.querySelector(`[data-field="${k}"]`); if(el2) el2.style.display=show?"":"none"; }); };
   $("#pc-dinner").onchange=toggleDinner; toggleDinner();
@@ -2702,14 +2716,15 @@ function openPrecheckinForm(){
     const rec={}; let missing=false;
     PRECHECKIN_FIELDS.forEach(f=>{ const val=$("#pc-"+f.key)?.value?.trim?.()||$("#pc-"+f.key)?.value||"";
       rec[f.key]=val; if(f.req && !val) missing=true; });
-    if(missing){ $("#pc-msg").innerHTML=`<span style="color:var(--warn)">Please complete the required fields (*).</span>`; return; }
+    if(missing){ $("#pc-msg").innerHTML=`<span style="color:#ffd9b0">Please complete the required fields (*).</span>`; return; }
     rec.source="pre check-in";
     $("#pc-submit").disabled=true; $("#pc-msg").textContent="Submitting…";
     await CorpGuestStore.add(rec);
-    v.innerHTML=`<div style="text-align:center;padding:60px 20px">
-      <img src="assets/bh-logo.svg" style="width:100px;margin-bottom:20px" alt="">
-      <h2 style="font-family:var(--serif);font-size:28px;color:var(--brand-navy)">Thank you, ${rec.name.split(" ")[0]}!</h2>
-      <p style="color:#5a6b7f;max-width:400px;margin:10px auto">Your pre check-in is complete. We look forward to welcoming you to Brandon Hall Hotel and Spa.</p></div>`;
+    v.innerHTML=`<div class="pc-thanks"><div class="pc-thanks-inner">
+      <img src="assets/marketing/logos/logo-gold-transparent.png" class="pc-splash-logo" onerror="this.src='assets/bh-logo.svg'">
+      <h1 class="pc-splash-title">Thank you, ${rec.name.split(" ")[0]}</h1>
+      <p class="pc-splash-sub">Your pre check-in is complete. We look forward to welcoming you to Brandon Hall Hotel and Spa.</p>
+      </div></div>`;
   };
 }
 
