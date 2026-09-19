@@ -2625,7 +2625,7 @@ function renderInsight(v){
 }
 
 /* ============================================================ STAYCORP */
-function precheckinURL(){ return location.href.split("#")[0]+"#precheckin-form"; }
+function precheckinURL(){ return location.href.split("#")[0].replace(/index\.html$/,"").replace(/\/$/,"")+"/precheckin.html"; }
 
 function renderPrecheckinSetup(v){
   v.appendChild(head("Pre Check-in — Setup","Share this link in booking confirmations. Guests complete it before arrival, and every submission builds your corporate guest database."));
