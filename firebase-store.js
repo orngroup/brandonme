@@ -150,3 +150,30 @@ const MktStore = {
     // (Cloudinary asset stays; deletion there needs a signed call — fine for a small team)
   }
 };
+
+/* ---- STAYCORP pre-check-in store (Firestore + local fallback) ---- */
+const CorpGuestStore = {
+  _cache: [], _listeners: [], live:false,
+  onChange(cb){ this._listeners.push(cb); },
+  _emit(){ this._listeners.forEach(cb=>cb(this._cache)); },
+  start(){
+    if(!FB.ready || !FB.user){ return false; }
+    if(this.live) return true; this.live=true;
+    FB.db.collection("precheckin").orderBy("created","desc")
+      .onSnapshot(snap=>{ this._cache=snap.docs.map(d=>({id:d.id,...d.data()})); this._emit(); },
+        err=>console.warn("Precheckin listener:",err.message));
+    return true;
+  },
+  all(){ return this.live? this._cache : (JSON.parse(localStorage.getItem("bh_precheckin")||"[]")); },
+  async add(rec){
+    rec.created = rec.created || new Date().toISOString();
+    if(FB.ready){
+      if(!FB.user){ try{ await fbEnsureAnon(); }catch{} }
+      try{ await FB.db.collection("precheckin").add(rec); return; }catch(e){ console.warn(e.message); }
+    }
+    // local fallback
+    const l=JSON.parse(localStorage.getItem("bh_precheckin")||"[]");
+    rec.id="PC-"+Date.now().toString(36).toUpperCase(); l.unshift(rec);
+    localStorage.setItem("bh_precheckin", JSON.stringify(l));
+  }
+};

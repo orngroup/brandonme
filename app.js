@@ -114,6 +114,8 @@ async function boot(){
     FBStore.onChange(()=>{ if(CURRENT_TAB==="pipeline") render(); });
     if(typeof MktStore!=="undefined"){ MktStore.start();
       MktStore.onChange(()=>{ if(CURRENT_TAB==="marketing") render(); }); }
+    if(typeof CorpGuestStore!=="undefined"){ CorpGuestStore.start();
+      CorpGuestStore.onChange(()=>{ if(CURRENT_TAB==="corpdb") render(); }); }
   } else {
     Store.seed();
   }
@@ -145,7 +147,7 @@ function render(){
   document.body.classList.toggle("home-active", CURRENT_TAB==="home");
   syncSidebar();
   ({home:renderHome, rooms:renderRooms, dining:renderDining, pipeline:renderPipeline, corprates:renderCorpRates, packages:renderPackages, suppliers:renderSuppliers, quote:renderQuote,
-    profit:renderProfit, chat:renderChat, mne:renderMnE, marketing:renderMarketing, social:renderSocial, menu:renderMenuBuilder, brochure:renderBrochureBuilder, tasks:renderTasks, insight:renderInsight, admin:renderAdmin }[CURRENT_TAB]||renderRooms)(v);
+    profit:renderProfit, chat:renderChat, mne:renderMnE, marketing:renderMarketing, social:renderSocial, menu:renderMenuBuilder, brochure:renderBrochureBuilder, tasks:renderTasks, insight:renderInsight, precheckin:renderPrecheckinSetup, corpdb:renderCorpDb, admin:renderAdmin }[CURRENT_TAB]||renderRooms)(v);
 }
 
 /* ============================================================ ROOMS */
@@ -906,6 +908,19 @@ function updateFilterCount(){
   c.innerHTML=`Showing <b>${list.length}</b> of ${(window._pipeAll||[]).length} · total value <b>${money(Math.round(val))}</b>`;
 }
 const STATUS_LABEL={enquiry:"Enquiry",provisional:"Provisional",confirmed:"Confirmed",cancelled:"Cancelled"};
+function ragStatus(e){
+  // manual override wins; else auto from follow-up date
+  if(e.rag) return e.rag;
+  if(["confirmed"].includes(e.status)) return "green";
+  if(["cancelled"].includes(e.status)) return "grey";
+  const today=new Date().toISOString().slice(0,10);
+  if(e.followUp){
+    if(e.followUp<today) return "red";      // overdue
+    const soon=new Date(); soon.setDate(soon.getDate()+3);
+    if(e.followUp<=soon.toISOString().slice(0,10)) return "amber"; // due within 3 days
+  }
+  return "green";
+}
 function renderPipeRows(){
   const box=$("#pipe-table"); if(!box)return;
   const list=filteredPipe().sort((a,b)=>(b.value||0)-(a.value||0));
@@ -913,17 +928,21 @@ function renderPipeRows(){
   const fmtDate=d=>d?(/^\d{4}-\d{2}-\d{2}/.test(d)?new Date(d).toLocaleDateString("en-GB"):d):"—";
   if(!list.length){ box.innerHTML=`<div class="empty"><div class="big">No matches</div>Try clearing a filter.</div>`; return; }
   box.innerHTML=`<table class="pipe-table">
-    <tr><th>Name</th><th>Status</th><th>Event / Rate</th><th>Room</th><th>Date</th><th>PAX</th><th>Owner</th><th>Source</th><th style="text-align:right">Value</th></tr>`+
+    <tr><th title="Status: Red overdue · Amber due soon · Green on track">RAG</th><th>Name</th><th>Status</th><th>Event / Rate</th><th>Room</th><th>Date</th><th>PAX</th><th>Owner</th><th>Last follow-up</th><th>Next follow-up</th><th style="text-align:right">Value</th></tr>`+
     list.slice(0,200).map(e=>{
       const roomName=e.roomName||ROOMS.find(r=>r.id===e.room)?.name||"—";
       const et=EVENT_TYPES.find(t=>t.id===e.event);
+      const rag=ragStatus(e);
       const overdueF = e.followUp && e.followUp<today && !["confirmed","cancelled"].includes(e.status);
       return `<tr class="pipe-row" data-id="${e.id}">
+        <td><span class="rag rag-${rag}" title="${rag}"></span></td>
         <td class="pr-name">${e.name}${overdueF?' <span class="pr-flag" title="Follow-up overdue">⚠</span>':''}</td>
         <td><span class="status-pill st-${e.status}">${STATUS_LABEL[e.status]||e.status}</span></td>
         <td>${et?et.icon+" "+et.label:(e.ratePlan||"—")}</td>
         <td>${roomName}</td><td>${fmtDate(e.date)}</td><td>${e.pax||"—"}</td>
-        <td>${e.owner||"—"}</td><td>${e._kind==="bob"?"BOB":(e.source||"manual")}</td>
+        <td>${e.owner||"—"}</td>
+        <td>${e.lastFollowUp?fmtDate(e.lastFollowUp):"—"}</td>
+        <td class="${overdueF?'fu-over':''}">${e.followUp?fmtDate(e.followUp):"—"}</td>
         <td style="text-align:right;font-weight:600">${e.value?money(Math.round(e.value)):"—"}</td></tr>`;
     }).join("")+`</table>${list.length>200?`<div class="qs-sub" style="margin-top:8px">Showing first 200 — narrow with filters to see more.</div>`:""}`;
   box.querySelectorAll(".pipe-row").forEach(row=>row.onclick=()=>{
@@ -969,6 +988,7 @@ function openEnquiryForm(pre){
     <div><label>Source</label><select id="e-source">${ENQ_SOURCES.map(s=>`<option>${s}</option>`).join("")}</select></div>
     <div><label>Follow-up date</label><input id="e-followup" type="date" value="${today}"></div>
     <div></div>
+    <div class="full"><label>Allergens &amp; dietary requirements</label><input id="e-allergens" placeholder="e.g. 2 vegetarian, 1 coeliac, 1 nut allergy"></div>
     <div class="full"><label>Notes</label><textarea id="e-notes" rows="3" placeholder="Requirements, budget, questions…"></textarea></div>
   </div>
   <div style="margin-top:18px"><button class="btn" id="e-submit">Save enquiry</button></div>`;
@@ -980,7 +1000,7 @@ function openEnquiryForm(pre){
       event:$("#e-event").value, date:$("#e-date").value, room:$("#e-room").value,
       pax:parseInt($("#e-pax").value)||null, owner:$("#e-owner").value, status:$("#e-stage").value,
       value:parseFloat($("#e-value").value)||0, source:$("#e-source").value, followUp:$("#e-followup").value,
-      notes:$("#e-notes").value });
+      allergens:$("#e-allergens").value, notes:$("#e-notes").value });
     closeModal(); render();
   };
 }
@@ -1003,8 +1023,9 @@ function openEnquiryDetail(e){
       <div><label>Stage</label><select id="m-stage">${ENQ_STAGES.map(([s,l])=>`<option value="${s}" ${e.status===s?"selected":""}>${l}</option>`).join("")}</select></div>
       <div><label>Value (£)</label><input id="m-value" type="number" min="0" value="${Math.round(e.value)||0}"></div>
       <div><label>Event date</label><input id="m-date" type="date" value="${/^\d{4}-\d{2}-\d{2}/.test(e.date||"")?e.date.slice(0,10):""}"></div>
-      <div><label>Follow-up</label><input id="m-followup" type="date" value="${e.followUp||""}"></div>
+      <div><label>Follow-up (next)</label><input id="m-followup" type="date" value="${e.followUp||""}"></div>
       <div><label>Source</label><select id="m-source">${ENQ_SOURCES.map(s=>`<option ${e.source===s?"selected":""}>${s}</option>`).join("")}</select></div>
+      <div><label>Status flag (RAG)</label><select id="m-rag"><option value="">Auto</option><option value="red" ${e.rag==="red"?"selected":""}>🔴 Red</option><option value="amber" ${e.rag==="amber"?"selected":""}>🟠 Amber</option><option value="green" ${e.rag==="green"?"selected":""}>🟢 Green</option></select></div>
       <div id="m-lostwrap" class="${e.status==="cancelled"?"":"hidden"}"><label>Lost reason</label><select id="m-lost">${LOST_REASONS.map(r=>`<option ${e.lostReason===r?"selected":""}>${r}</option>`).join("")}</select></div>
     </div>
     <button class="btn sm" id="m-save" style="margin-top:10px">Save changes</button>
@@ -1012,6 +1033,7 @@ function openEnquiryDetail(e){
     ${(e.email||e.phone)?`<div class="sec-title">Contact</div>
     <p style="font-size:14px">${e.email||"—"} · ${e.phone||"—"} ${e.company?" · "+e.company:""}</p>`:""}
     ${(e.budget||e.accommodation)?`<p style="font-size:14px;color:var(--muted)">${e.budget?`Budget: ${e.budget} · `:""}${e.accommodation?`Accommodation: ${e.accommodation}`:""}</p>`:""}
+    ${e.allergens?`<div class="sec-title">Allergens &amp; dietary ⚠️</div><p style="font-size:14px;line-height:1.6;color:#b3261e">${e.allergens}</p>`:""}
     ${e.notes?`<div class="sec-title">Notes</div><p style="font-size:14px;line-height:1.6">${e.notes}</p>`:""}
 
     <div class="sec-title">Task checklist ${e._kind==="bob"?"":`<button class="mini-btn" id="m-genlist">${(e.checklist&&e.checklist.length)?"Regenerate":"Generate"}</button>`}</div>
@@ -1064,9 +1086,12 @@ function openEnquiryDetail(e){
   };
 
   $("#m-save").onclick=()=>{
+    const newFollowUp=$("#m-followup").value;
+    // if the follow-up date changed, record the previous one as "last follow-up"
+    const lastFollowUp = (e.followUp && newFollowUp!==e.followUp) ? e.followUp : (e.lastFollowUp||"");
     const patch={ owner:$("#m-owner").value, status:$("#m-stage").value,
       value:parseFloat($("#m-value").value)||0, date:$("#m-date").value||e.date,
-      followUp:$("#m-followup").value, source:$("#m-source").value, checklist };
+      followUp:newFollowUp, lastFollowUp, rag:$("#m-rag").value, source:$("#m-source").value, checklist };
     if($("#m-stage").value==="cancelled") patch.lostReason=$("#m-lost").value;
     if(isBob){
       DB.add(Object.assign({ name:e.name, pax:e.pax, room:e.room, roomName:e.roomName,
@@ -2599,6 +2624,138 @@ function renderInsight(v){
   const b=el("button","btn"); b.textContent="Go to Sales Pipeline"; b.onclick=()=>switchTab("pipeline"); v.appendChild(b);
 }
 
+/* ============================================================ STAYCORP */
+function precheckinURL(){ return location.href.split("#")[0]+"#precheckin-form"; }
+
+function renderPrecheckinSetup(v){
+  v.appendChild(head("Pre Check-in — Setup","Share this link in booking confirmations. Guests complete it before arrival, and every submission builds your corporate guest database."));
+  const url=precheckinURL();
+  const btn=`<a href="${url}" target="_blank" style="display:inline-block;background:#2f6f9e;color:#fff;padding:12px 24px;border-radius:30px;font:600 15px/1 'Lato',sans-serif;text-decoration:none">Complete your pre check-in →</a>`;
+
+  const panel=el("div","quote-panel");
+  panel.innerHTML=`
+    <div class="sec-title">Shareable link</div>
+    <p class="qs-sub" style="margin-bottom:6px">Paste this into booking confirmation emails:</p>
+    <div class="embed-box">${url}<button class="cp" id="pc-copylink">Copy</button></div>
+
+    <div class="sec-title">Email button (copy &amp; paste HTML)</div>
+    <div class="embed-box">${btn.replace(/</g,"&lt;")}<button class="cp" id="pc-copybtn">Copy</button></div>
+
+    <div class="sec-title">Suggested email wording</div>
+    <div class="embed-box" style="white-space:pre-wrap">Dear guest,
+
+We look forward to welcoming you to Brandon Hall Hotel and Spa. To help us prepare for your stay, please take a moment to complete your pre check-in:
+
+${url}
+
+It only takes a minute and lets us tailor your arrival, dinner and any special requests.
+
+Warm regards,
+The Brandon Hall Team<button class="cp" id="pc-copyemail">Copy</button></div>
+
+    <div class="sec-title">How it looks</div>
+    <div style="padding:18px;background:var(--paper);border-radius:10px;text-align:center">${btn}</div>
+
+    <div class="admin-note" style="margin-top:16px">Submissions flow into <b>Corporate Database</b>. When the portal is live on Firebase they're shared across the team; in demo mode they save to this browser.</div>`;
+  v.appendChild(panel);
+  const copy=(id,text,btnEl)=>{ $(id).onclick=()=>{ navigator.clipboard?.writeText(text); btnEl.textContent="Copied"; }; };
+  copy("#pc-copylink",url,$("#pc-copylink"));
+  const emailBtn=`<a href="${url}" target="_blank" style="display:inline-block;background:#2f6f9e;color:#fff;padding:12px 24px;border-radius:30px;font:600 15px/1 'Lato',sans-serif;text-decoration:none">Complete your pre check-in →</a>`;
+  $("#pc-copybtn").onclick=()=>{ navigator.clipboard?.writeText(emailBtn); $("#pc-copybtn").textContent="Copied"; };
+  $("#pc-copyemail").onclick=()=>{ navigator.clipboard?.writeText($("#pc-copyemail").parentElement.textContent.replace("Copy","").trim()); $("#pc-copyemail").textContent="Copied"; };
+}
+
+/* Public pre-check-in form (no login) */
+function openPrecheckinForm(){
+  $("#login")?.classList.add("hidden");
+  const app=$("#app"); if(app) app.classList.remove("hidden");
+  document.querySelector(".sf-sidebar")&&(document.querySelector(".sf-sidebar").style.display="none");
+  document.querySelector(".sf-header")&&(document.querySelector(".sf-header").style.display="none");
+  document.querySelector(".sf-main")&&(document.querySelector(".sf-main").style.marginLeft="0");
+  const v=$("#view"); if(!v)return; v.innerHTML=""; v.style.maxWidth="620px"; v.style.margin="0 auto";
+  const wrap=el("div");
+  wrap.innerHTML=`
+    <div style="text-align:center;padding:26px 0 10px"><img src="assets/bh-logo.svg" style="width:90px" alt="Brandon Hall"></div>
+    <div class="quote-panel">
+      <h3 style="font-family:var(--serif);font-size:24px">Pre Check-in</h3>
+      <p class="qs-sub" style="margin-bottom:14px">Welcome to Brandon Hall Hotel and Spa. Please complete the details below so we can prepare for your stay.</p>
+      <div class="form-grid" id="pc-fields"></div>
+      <div id="pc-msg" class="qs-sub" style="margin-top:10px"></div>
+      <div style="margin-top:16px"><button class="btn" id="pc-submit">Submit pre check-in</button></div>
+    </div>
+    <p class="qs-sub" style="text-align:center;margin:16px 0 40px">Brandon Hall Hotel and Spa · Main Street, Brandon, Coventry CV8 3FW</p>`;
+  v.appendChild(wrap);
+  const box=$("#pc-fields");
+  box.innerHTML=PRECHECKIN_FIELDS.map(f=>{
+    const full = f.type==="textarea"||f.key==="roomReq"||f.key==="dietary"||f.key==="occasion" ? "full":"";
+    let input;
+    if(f.type==="textarea") input=`<textarea id="pc-${f.key}" rows="2" placeholder="${f.ph||""}"></textarea>`;
+    else if(f.type==="select") input=`<select id="pc-${f.key}">${f.opts.map(o=>`<option>${o}</option>`).join("")}</select>`;
+    else input=`<input id="pc-${f.key}" type="${f.type}" placeholder="${f.ph||""}">`;
+    return `<div class="${full}" data-field="${f.key}"><label>${f.label}${f.req?' *':''}</label>${input}</div>`;
+  }).join("");
+  // conditional dinner fields
+  const toggleDinner=()=>{ const show=$("#pc-dinner")?.value==="Yes";
+    ["dinnerTime","dinnerCovers"].forEach(k=>{ const el2=box.querySelector(`[data-field="${k}"]`); if(el2) el2.style.display=show?"":"none"; }); };
+  $("#pc-dinner").onchange=toggleDinner; toggleDinner();
+  $("#pc-submit").onclick=async()=>{
+    const rec={}; let missing=false;
+    PRECHECKIN_FIELDS.forEach(f=>{ const val=$("#pc-"+f.key)?.value?.trim?.()||$("#pc-"+f.key)?.value||"";
+      rec[f.key]=val; if(f.req && !val) missing=true; });
+    if(missing){ $("#pc-msg").innerHTML=`<span style="color:var(--warn)">Please complete the required fields (*).</span>`; return; }
+    rec.source="pre check-in";
+    $("#pc-submit").disabled=true; $("#pc-msg").textContent="Submitting…";
+    await CorpGuestStore.add(rec);
+    v.innerHTML=`<div style="text-align:center;padding:60px 20px">
+      <img src="assets/bh-logo.svg" style="width:100px;margin-bottom:20px" alt="">
+      <h2 style="font-family:var(--serif);font-size:28px;color:var(--brand-navy)">Thank you, ${rec.name.split(" ")[0]}!</h2>
+      <p style="color:#5a6b7f;max-width:400px;margin:10px auto">Your pre check-in is complete. We look forward to welcoming you to Brandon Hall Hotel and Spa.</p></div>`;
+  };
+}
+
+/* Corporate database — aggregates pre-check-ins by company */
+function renderCorpDb(v){
+  v.appendChild(head("Corporate Database","Every pre check-in, grouped by company — room nights, guests and stay patterns to target corporate rates."));
+  const list=CorpGuestStore.all();
+  if(!list.length){
+    v.appendChild(el("div","empty",`<div class="big">No pre check-ins yet</div>Share the pre check-in link (StayCORP → Pre Check-in Setup) to start building the database.`));
+    return;
+  }
+  const nights=r=>{ if(r.checkin&&r.checkout){ const d=(new Date(r.checkout)-new Date(r.checkin))/864e5; return d>0?Math.round(d):1; } return 1; };
+  const comp={};
+  list.forEach(r=>{ const key=(r.company||"").trim()||"(individual)";
+    const c=comp[key]||(comp[key]={company:key, guests:0, nights:0, stays:0, dinners:0, records:[]});
+    c.guests+=1; c.nights+=nights(r); c.stays+=1; if(r.dinner==="Yes")c.dinners+=1; c.records.push(r); });
+  const companies=Object.values(comp).sort((a,b)=>b.nights-a.nights);
+  const totalNights=companies.reduce((s,c)=>s+c.nights,0);
+  const corpCandidates=companies.filter(c=>c.company!=="(individual)" && c.nights*12>=CORP_THRESHOLD);
+
+  const kpis=el("div","stat-cards");
+  kpis.innerHTML=`
+    <div class="stat-card"><div class="sc-v">${list.length}</div><div class="sc-k">Pre check-ins</div></div>
+    <div class="stat-card"><div class="sc-v">${companies.filter(c=>c.company!=="(individual)").length}</div><div class="sc-k">Companies</div></div>
+    <div class="stat-card accent"><div class="sc-v">${totalNights}</div><div class="sc-k">Room nights captured</div></div>
+    <div class="stat-card"><div class="sc-v">${corpCandidates.length}</div><div class="sc-k">Corporate candidates</div></div>`;
+  v.appendChild(kpis);
+
+  v.appendChild(el("div","sec-title","Companies"));
+  const t=el("table","data-table");
+  t.innerHTML=`<tr><th>Company</th><th>Guests</th><th>Room nights</th><th>Annualised</th><th>Dinners</th><th></th></tr>`+
+    companies.map(c=>{ const ann=c.nights*12; const cand=c.company!=="(individual)"&&ann>=CORP_THRESHOLD;
+      return `<tr class="${cand?'cand':''}"><td>${c.company}</td><td>${c.guests}</td><td>${c.nights}</td>
+      <td>${ann}</td><td>${c.dinners}</td><td>${cand?'<span class="cand-flag sm">Corporate candidate</span>':''}</td></tr>`;
+    }).join("");
+  v.appendChild(t);
+
+  v.appendChild(el("div","sec-title","Recent pre check-ins"));
+  const rt=el("table","data-table");
+  rt.innerHTML=`<tr><th>Guest</th><th>Company</th><th>Check-in</th><th>Nights</th><th>Dinner</th><th>Dietary</th></tr>`+
+    list.slice(0,40).map(r=>`<tr><td>${r.name}</td><td>${r.company||"—"}</td>
+      <td>${r.checkin?new Date(r.checkin).toLocaleDateString("en-GB"):"—"}</td><td>${nights(r)}</td>
+      <td>${r.dinner==="Yes"?(r.dinnerTime||"Yes"):"—"}</td><td>${r.dietary||"—"}</td></tr>`).join("");
+  v.appendChild(rt);
+}
+
 /* ============================================================ HELPERS */
 function head(title,sub){ const h=el("div","page-head"); h.innerHTML=`<h2>${title}</h2>${sub?`<p>${sub}</p>`:""}`; return h; }
 function showModal(title,sub,bodyHTML){
@@ -2630,3 +2787,4 @@ function openPublicChat(){
   startBot(frame);
 }
 if(location.hash==="#events-chat"){ window.addEventListener("DOMContentLoaded",openPublicChat); openPublicChat(); }
+if(location.hash==="#precheckin-form"){ window.addEventListener("DOMContentLoaded",openPrecheckinForm); openPrecheckinForm(); }

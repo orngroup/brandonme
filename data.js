@@ -273,10 +273,10 @@ const SUPPLIERS = [
 
 /* ---- EVENTS CONCIERGE — Natalie Freeman, warm & personal ----
    Modelled on real enquiries (arrangeMY BOT, Hitched, website leads). */
-const BOT_PERSON = { name:"Natalie Freeman", role:"Events Team, Brandon Hall Hotel & Spa",
+const BOT_PERSON = { name:"Natalie Freeman", role:"Events Team, Brandon Hall Hotel and Spa",
   avatar:"NF" };
 const BOT_GREETINGS = [
-  "Hi there! 👋 I'm Natalie from the events team here at Brandon Hall.",
+  "Hi there! 👋 I'm Natalie from the events team here at Brandon Hall Hotel and Spa.",
   "Lovely to have you — I'd love to help plan your event with us.",
   "I'll just ask you a few quick things so I can put together exactly the right proposal for you. Shall we make a start?"
 ];
@@ -848,7 +848,8 @@ const BROCHURE_TEMPLATES = {
 const FLOW_MODULES = [
   { id:"events",    name:"EventsFLOW",    caption:"Plan. Organise. Deliver.",       icon:"📅", colour:"#4a9d7f", tint:"#e6f3ee", tabs:["chat","dining"] },
   { id:"room",      name:"RoomFLOW",      caption:"Keep operations in flow.",       icon:"🛏️", colour:"#4a86c7", tint:"#e6eff8", tabs:["rooms","packages"] },
-  { id:"sales",     name:"SalesFLOW",     caption:"Leads. Proposals. Growth.",      icon:"📊", colour:"#8b5c8f", tint:"#f1e9f2", tabs:["pipeline","corprates","profit"] },
+  { id:"sales",     name:"SalesFLOW",     caption:"Leads. Proposals. Growth.",      icon:"📊", colour:"#8b5c8f", tint:"#f1e9f2", tabs:["pipeline","profit"] },
+  { id:"corp",      name:"StayCORP",      caption:"Corporate guests & rates.",       icon:"🏢", colour:"#2f6f9e", tint:"#e6eef5", tabs:["precheckin","corpdb","corprates"] },
   { id:"marketing", name:"MarketingFLOW", caption:"Create. Campaign. Convert.",     icon:"📣", colour:"#c85c6b", tint:"#f8e9eb", tabs:["marketing","social"] },
   { id:"task",      name:"TaskFLOW",      caption:"Tasks. Teams. Accountability.",  icon:"✅", colour:"#d4a24a", tint:"#faf1e0", tabs:["tasks"] },
   { id:"asset",     name:"AssetFLOW",     caption:"Maintain. Track. Extend.",       icon:"🔧", colour:"#3fa8a0", tint:"#e3f3f1", tabs:["mne","suppliers"] },
@@ -859,14 +860,16 @@ const FLOW_MODULES = [
 /* Tab metadata (label + icon) for sidebar links and cards */
 const TAB_META = {
   home:{label:"Home",icon:"🏠"},
-  rooms:{label:"Rooms",icon:"🚪"}, dining:{label:"Dining & Bars",icon:"🍽️"},
-  pipeline:{label:"Sales Pipeline",icon:"📊"}, corprates:{label:"Corporate Rates",icon:"💷"},
+  rooms:{label:"Meeting Rooms",icon:"🚪"}, dining:{label:"Dining & Bars",icon:"🍽️"},
+  pipeline:{label:"Sales Pipeline",icon:"📊"},
   packages:{label:"Packages",icon:"📦"}, suppliers:{label:"Suppliers",icon:"🤝"},
   quote:{label:"Create Quote",icon:"🧾"}, profit:{label:"Profit Tool",icon:"💰"},
   chat:{label:"Events Chat",icon:"💬"}, mne:{label:"M&E Upgrade",icon:"🖥️"},
   marketing:{label:"Marketing Library",icon:"🖼️"}, menu:{label:"Menu Builder",icon:"📝"},
   brochure:{label:"Brochure Builder",icon:"📕"}, social:{label:"Social Studio",icon:"📱"},
   tasks:{label:"Tasks",icon:"✅"}, insight:{label:"Insights",icon:"📈"},
+  precheckin:{label:"Pre Check-in Setup",icon:"📋"}, corpdb:{label:"Corporate Database",icon:"🏢"},
+  corprates:{label:"Corporate Rates",icon:"💷"},
   admin:{label:"Admin",icon:"⚙️"}
 };
 
@@ -882,3 +885,25 @@ function userModules(userKey){
   if(acc==="all") return FLOW_MODULES;
   return FLOW_MODULES.filter(m=>acc.includes(m.id));
 }
+
+/* ============================================================
+   STAYCORP — pre-check-in form + corporate guest database
+   ============================================================ */
+const PRECHECKIN_FIELDS = [
+  { key:"name",      label:"Full name",            type:"text",  req:true },
+  { key:"company",   label:"Company",              type:"text",  req:false },
+  { key:"email",     label:"Email",                type:"email", req:true },
+  { key:"phone",     label:"Phone",                type:"tel",   req:false },
+  { key:"checkin",   label:"Check-in date",        type:"date",  req:true },
+  { key:"checkout",  label:"Check-out date",       type:"date",  req:false },
+  { key:"arrival",   label:"Estimated arrival time", type:"time", req:false },
+  { key:"carReg",    label:"Car registration",     type:"text",  req:false },
+  { key:"roomReq",   label:"Room requests / preferences", type:"textarea", req:false, ph:"e.g. quiet room, high floor, twin beds, accessible" },
+  { key:"dinner",    label:"Dinner reservation?",  type:"select", opts:["No","Yes"], req:false },
+  { key:"dinnerTime",label:"Dinner time",          type:"time",  req:false, showIf:"dinner=Yes" },
+  { key:"dinnerCovers",label:"Number of covers",   type:"number",req:false, showIf:"dinner=Yes" },
+  { key:"dietary",   label:"Dietary requirements / allergies", type:"text", req:false, ph:"e.g. vegetarian, nut allergy" },
+  { key:"occasion",  label:"Special occasion?",    type:"text",  req:false, ph:"e.g. birthday, anniversary" },
+  { key:"billing",   label:"Bill to company account?", type:"select", opts:["No","Yes"], req:false },
+  { key:"newsletter",label:"Keep me updated with offers", type:"select", opts:["No","Yes"], req:false }
+];
